@@ -2,7 +2,32 @@
 requires = ["setuptools>=42.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-
+# [project]
+# name = "napari-calciumv3"
+# description = "Cell Segmentation and analysis in napari."
+# keywords = ["U-Net convolution Neural Network"]
+# readme = "README.md"
+# requires-python = ">=3.8"
+# license = { text = "BSD 3-Clause License" }
+# authors = [
+#     { name = "Kellen Winden", email = "kellen.winden@gmail.com" },
+#     { name = "Anna Yang", email = "annayangzq26@gmail.com" },
+# ]
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "Framework :: napari",
+#     "Intended Audience :: Science/Research",
+#     "License :: OSI Approved :: BSD License",
+#     "Operating System :: OS Independent",
+#     "Programming Language :: Python",
+#     "Programming Language :: Python :: 3",
+#     "Programming Language :: Python :: 3.8",
+#     "Programming Language :: Python :: 3.9",
+#     "Programming Language :: Python :: 3.10",
+#     "Topic :: System :: Image Processing",
+#     "Topic :: System :: Machine Learning"
+# ]
 
 [tool.black]
 line-length = 79
