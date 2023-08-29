@@ -88,7 +88,6 @@ class Calcium(QWidget):
 
 
         import tensorflow as tf
-        print(tf.__version__)
         import tensorflow.keras.backend as K
         from tensorflow.keras.models import load_model
 
@@ -109,6 +108,7 @@ class Calcium(QWidget):
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
             # print('ROI average prediction:', self.get_ROI_prediction(self.roi_dict, self.prediction_layer.data))
 
+    # NOTE: why return label_layer not assigning to the global variable?
     def segment(self, img_stack, minsize, background_label):
         '''
         Predict the cell bodies using the trained NN model 
@@ -703,7 +703,7 @@ class Calcium(QWidget):
 
         parameters:
         --------------
-        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int) 
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
         framerate: float. 1 / exposure
 
         returns:
@@ -870,7 +870,7 @@ class Calcium(QWidget):
 
         return phase # Python list
 
-    def save_files(self):
+    def save_files(self) -> None:
         '''
         to generate files for the analysis on the image
 
@@ -880,7 +880,7 @@ class Calcium(QWidget):
 
         returns:
         ---------------
-        None. 
+        None.
         '''
         if self.roi_dict:
             save_path = self.img_path[0:-4]
@@ -917,7 +917,7 @@ class Calcium(QWidget):
                 for i in range(dff_signal.shape[0]):
                     writer.writerow(dff_signal[i, :])
 
-            # the median background fluorescence 
+            # the median background fluorescence
             with open(save_path + '/medians.json', 'w') as median_file:
                 json.dump(self.median, median_file, indent="")
 
@@ -929,26 +929,22 @@ class Calcium(QWidget):
             with open(save_path + '/spike_times.json', 'w') as spike_file:
                 json.dump(self.spike_times, spike_file, indent="")
 
-            # dict. label (int) - dict[amplitude, peak_indices, base_indices] 
+            # dict. label (int) - dict[amplitude, peak_indices, base_indices]
             with open(save_path + '/roi_analysis.json', 'w') as analysis_file:
                 json.dump(self.roi_analysis, analysis_file, indent="")
 
             # num_events for each labeled ROI
-            num_events = np.zeros(2, len(self.spike_times.keys()))
-            num_roi = len(self.spike_times)
-            print(f'num_roi: {num_roi}')
-
+            num_events = np.zeros(len(self.spike_times.keys()))
             for i, r in enumerate(self.spike_times):
                 num_e = len(self.spike_times[r])
-                num_events[1, i] = num_e
+                num_events[i] = num_e
 
             with open(save_path + '/num_events.csv', 'w') as num_event_file:
                 writer = csv.writer(num_event_file)
                 writer.writerow(self.spike_times.keys())
-                for i in range(num_events.shape[1]):
-                    writer.writerow(num_events[1, i])
+                writer.writerow(num_events)
 
-            # label with the maximum correlation with one of the spike templates
+            # label with the maximum correlation withs one of the spike templates
             max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
                                 len(self.max_correlations)])
             for i, r in enumerate(self.max_correlations):
@@ -975,14 +971,15 @@ class Calcium(QWidget):
             self.canvas_traces.print_png(save_path + '/traces.png')
             self.canvas_just_traces.print_png(save_path + '/traces_no_detections.png')
 
-            # NOTE: delete the , after self.label_layer.data
-            # save the ROI image
-            label_array = np.stack((self.label_layer.data) * 4, axis=-1).astype(float)
+            label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
             for i in range(1, np.max(self.labels) + 1):
                 i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
+
+            # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
             roi_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-            roi_layer.save(save_path + '/ROIs.png')
+            roi_layer.save(save_path + '/ROIs.tif')
+            # self.label_layer.print_png(save_path + '/ROIs.svg')
 
             # the centers of each ROI
             roi_centers = {}
@@ -1081,11 +1078,19 @@ class Calcium(QWidget):
             sum_file.write(f'Average Number of events: {avg_num_events}\n')
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
+                print("framerate ", self.framerate)
                 if self.framerate:
-                    sum_file.write(f'\tFrequency: {0.2:avg_num_events/self.framerate} per frame/second')
+                    sum_file.write(f'\tFrequency: {avg_num_events/self.framerate} per frame/second')
+                else:
+                    print(len(self.img_stack))
+                    if len(self.img_stack) > 3:
+                        frame = self.img_stack.shape[1]
+                    else:
+                        frame = self.img_stack.shape[0]
+                    sum_file.write(f'\tFrequency: {avg_num_events/frame} per frame\n')
                 max_event = np.argmax(total_num_events)
                 max_num_event = np.max(total_num_events)
-                sum_file.write(f'\t{max_event}th ROI has the most number of events ({max_num_event})\n')
+                sum_file.write(f'\t{max_event}th ROI has the most number of events: {max_num_event} peaks\n')
 
             sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
