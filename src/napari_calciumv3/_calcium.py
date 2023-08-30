@@ -934,15 +934,28 @@ class Calcium(QWidget):
                 json.dump(self.roi_analysis, analysis_file, indent="")
 
             # num_events for each labeled ROI
-            num_events = np.zeros(len(self.spike_times.keys()))
+            num_events = np.zeros((len(self.spike_times.keys()), 3))
+            active_roi = 0
+            # freq_e = np.zeros(len(self.spike_times.keys()))
             for i, r in enumerate(self.spike_times):
                 num_e = len(self.spike_times[r])
-                num_events[i] = num_e
+                if num_e > 0:
+                    active_roi += 1
+                num_events[i, 0] = i
+                num_events[i, 1] = num_e
+                if self.framerate:
+                    num_events[i, 2] = num_e / self.framerate
+                else:
+                    frame = len(self.img_stack)
+                    num_events[i, 2] = num_e / frame
 
             with open(save_path + '/num_events.csv', 'w') as num_event_file:
                 writer = csv.writer(num_event_file)
-                writer.writerow(self.spike_times.keys())
-                writer.writerow(num_events)
+                fields = ['ROI', 'Num_events', 'Frequency']
+                writer.writerow(fields)
+                writer.writerows(num_events)
+                sum_text = [f'Active ROIs: {str(active_roi)}', f'Total frame/exposure: {str(frame)}']
+                writer.writerows([sum_text])
 
             # label with the maximum correlation withs one of the spike templates
             max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
