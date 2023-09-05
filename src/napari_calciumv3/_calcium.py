@@ -934,9 +934,11 @@ class Calcium(QWidget):
                 json.dump(self.roi_analysis, analysis_file, indent="")
 
             # num_events for each labeled ROI
+            # first column: ROI number
+            # second column: num of events
+            # third column: frequency (num events/frames or exposure )
             num_events = np.zeros((len(self.spike_times.keys()), 3))
             active_roi = 0
-            # freq_e = np.zeros(len(self.spike_times.keys()))
             for i, r in enumerate(self.spike_times):
                 num_e = len(self.spike_times[r])
                 if num_e > 0:
@@ -944,6 +946,7 @@ class Calcium(QWidget):
                 num_events[i, 0] = i
                 num_events[i, 1] = num_e
                 if self.framerate:
+                    frame = self.framerate
                     num_events[i, 2] = num_e / self.framerate
                 else:
                     frame = len(self.img_stack)
@@ -1037,7 +1040,8 @@ class Calcium(QWidget):
                 total_time_to_rise.extend(self.roi_analysis[r]['time_to_rise'])
                 total_max_slope.extend(self.roi_analysis[r]['max_slope'])
                 # NOTE: add the number of spikes for each roi
-                total_num_events.append(len(self.spike_times[r]))
+                if len(self.spike_times[r]) > 0:
+                    total_num_events.append(len(self.spike_times[r]))
             if len(self.roi_analysis[r]['IEI']) > 0:
                 total_IEI.extend(self.roi_analysis[r]['IEI'])
 
