@@ -81,7 +81,6 @@ if __name__ == "__main__":
     if len(file_name) < 1:
         file_name = "summary.txt"
     variable = list(input("variable name (optional; default to average amplitude; use ',' to separate each variable): ").split(","))  # noqa: E501
-    print(variable[0])
     if "all" in variable[0]:
         variable = ["Total ROI", "Percent Active ROI", "Average Amplitude",
                     "Amplitude Standard Deviation", "Average Max Slope",
