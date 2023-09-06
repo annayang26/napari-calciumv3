@@ -1,9 +1,6 @@
-from glob import glob
-import os
-import re
 import csv
-import sys
-import pathlib
+import os
+
 
 def compile_data(base_folder, file_name, 
                  variable, compile_name):
@@ -34,7 +31,7 @@ def compile_data(base_folder, file_name,
     '''
     dir_list = []
 
-    for (dir_path, dir_names, file_names) in os.walk(base_folder):
+    for (dir_path, _dir_names, file_names) in os.walk(base_folder):
         if file_name in file_names:
             dir_list.append(dir_path)
 
@@ -43,20 +40,21 @@ def compile_data(base_folder, file_name,
 
     files = []
 
-    # traverse through all the matching files 
-    for dir in dir_list:
-        result = open(dir + "/" + file_name, "r")
+    # traverse through all the matching files
+    for dir_name in dir_list:
+        result = open(dir_name + "/" + file_name)
         # path = os.path.basename(os.path.dirname(file))
         # print(path)
         data = {}
-        data['name'] = dir.split('/')[-1][:-4]
+        data['name'] = dir_name.split('/')[-1][:-4]
+        print("name: ", dir_name.split('/')[-1][:-4])
 
         # find the variable in the file
         for line in result:
             for var in variable:
                 # print("variable is: ", var)
                 if var.lower().strip() in line.lower():
-                    if var not in data.keys():
+                    if var not in data:
                         data[var] = []
                     items = line.split(":")
                     for item in items:
@@ -68,7 +66,7 @@ def compile_data(base_folder, file_name,
         if len(data) > 1:
             files.append(data)
         else: 
-            print(f'There is no {var} mentioned in the {dir}. Please check again.')
+            print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
 
     if len(files) > 0:
         # write into a new csv file
@@ -84,7 +82,7 @@ def compile_data(base_folder, file_name,
 
 if __name__ == "__main__":
     base_folder = input("base folder name: ").strip()
-    
+
     file_name = input("file name (optional; default to summary.txt):")
     if len(file_name) < 1:
         file_name = "summary.txt"
@@ -96,4 +94,3 @@ if __name__ == "__main__":
         output_name = "compile_data.csv"
     compile_data(base_folder, file_name=file_name, variable=variable, 
                  compile_name=output_name)
-    
