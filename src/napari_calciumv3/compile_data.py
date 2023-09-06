@@ -93,7 +93,7 @@ if __name__ == "__main__":
         variable = ["Average Amplitude", "Average Max Slope",
             "Average Time to Rise", "Average Interevent Interval (IEI)",
             "Average Number of events"]
-    elif len(variable) < 2:
+    elif len(variable[0]) < 1:
         variable = ["Average Amplitude"]
     output_name = input("Output file name (default: compile_data.csv): ")
     if len(output_name) < 1:
