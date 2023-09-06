@@ -89,7 +89,6 @@ class Calcium(QWidget):
 
         import tensorflow as tf
         import tensorflow.keras.backend as K
-        from tensorflow.keras.models import load_model
 
         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
         background_layer = 0
