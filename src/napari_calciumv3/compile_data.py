@@ -43,29 +43,23 @@ def compile_data(base_folder, file_name,
     # traverse through all the matching files
     for dir_name in dir_list:
         result = open(dir_name + "/" + file_name)
-        # path = os.path.basename(os.path.dirname(file))
-        # print(path)
         data = {}
         data['name'] = dir_name.split(os.path.sep)[-1][:-4]
-        print(dir_name.split(os.path.sep)[-1][:-4])
 
         # find the variable in the file
         for line in result:
             for var in variable:
-                # print("variable is: ", var)
                 if var.lower().strip() in line.lower():
                     if var not in data:
                         data[var] = []
                     items = line.split(":")
                     for item in items:
-                        try:
-                            data[var] = float(item)
-                        except ValueError:
-                            continue
+                        if any(char.isdigit() for char in item):
+                            data[var] = item
 
         if len(data) > 1:
             files.append(data)
-        else: 
+        else:
             print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
 
     if len(files) > 0:
@@ -87,7 +81,20 @@ if __name__ == "__main__":
     if len(file_name) < 1:
         file_name = "summary.txt"
     variable = list(input("variable name (optional; default to average amplitude; use ',' to separate each variable): ").split(","))  # noqa: E501
-    if len(variable) < 2:
+    print(variable[0])
+    if "all" in variable[0]:
+        variable = ["Total ROI", "Percent Active ROI", "Average Amplitude",
+                    "Amplitude Standard Deviation", "Average Max Slope",
+                    "Max Slope Standard Deviation", "Average Time to Rise",
+                    "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
+                    "IEI Standard Deviation", "Average Number of events",
+                    "Number of events Standard Deviation", "Frequency",
+                    "Global Connectivity"]
+    elif "average" in variable[0]:
+        variable = ["Average Amplitude", "Average Max Slope",
+            "Average Time to Rise", "Average Interevent Interval (IEI)",
+            "Average Number of events"]
+    elif len(variable) < 2:
         variable = ["Average Amplitude"]
     output_name = input("Output file name (default: compile_data.csv): ")
     if len(output_name) < 1:
