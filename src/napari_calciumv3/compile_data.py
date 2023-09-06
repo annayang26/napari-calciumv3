@@ -46,8 +46,8 @@ def compile_data(base_folder, file_name,
         # path = os.path.basename(os.path.dirname(file))
         # print(path)
         data = {}
-        data['name'] = dir_name.split('/')[-1][:-4]
-        print("name: ", dir_name.split('/')[-1][:-4])
+        data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+        print(dir_name.split(os.path.sep)[-1][:-4])
 
         # find the variable in the file
         for line in result:
