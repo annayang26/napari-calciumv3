@@ -5,9 +5,16 @@ import os
 from typing import TYPE_CHECKING
 
 import numpy as np
+import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
-from qtpy.QtWidgets import QMessageBox, QPushButton, QVBoxLayout, QWidget
+from qtpy.QtWidgets import (
+    QFileDialog,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 from scipy import ndimage as ndi
 from skimage import feature, filters, morphology, segmentation
 
@@ -16,13 +23,17 @@ if TYPE_CHECKING:
 
 class Calcium(QWidget):
     # your QWidget.__init__ can optionally request the napari viewer instance
-    # in one of two ways:
+    # in one of
     # 1. use a parameter called `napari_viewer`, as done here
     # 2. use a type annotation of 'napari.viewer.Viewer' for any parameter
     def __init__(self, napari_viewer) -> None:
         super().__init__()
         self.viewer = napari_viewer
         self.setLayout(QVBoxLayout())
+
+        self.bp_btn = QPushButton("Select a Folder")
+        self.bp_btn.clicked.connect(self._select_folder)
+        self.layout().addWidget(self.bp_btn)
 
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
@@ -63,6 +74,42 @@ class Calcium(QWidget):
         self.img_path = None
         self.colors = []
 
+    def _select_folder(self):
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.Directory)
+
+        # NOTE: trying for one experiemnt folder
+        if dlg.exec_():
+            folder_names = dlg.selectedFiles() # list of the path to the folder selected
+
+        # traverse through all the tif files in the selected folder
+        for file_name in os.listdir(folder_names[0]):
+            if file_name.endswith(".tif"):
+                file_path = os.path.join(folder_names[0], file_name)
+                print("file_path: ", file_path, "len of path: ", len(file_path))
+
+                # img = tff.TiffFile(file_path)
+                # print("len of tiff: ", len(img.series))
+                # img_array = img.series[0].asarray()
+                # print(img_array.shape)
+
+                # # pass each tif file to the viewer/layer
+                # self.viewer.add_image(img_array,
+                #                       name=file_name)
+                # print(len(self.viewer.layers))
+                # print("path: ", self.viewer.layers[0].source.path)
+                # self.img_path = file_path
+                self.viewer.open(file_path)
+                self._on_click()
+                self.save_files()
+                self.clear()
+
+                # self._on_click()
+            # analyze
+            # save the analysis
+            # clear
+            # pass in the next tif file
+
     def _on_click(self) -> None:
         '''
         once hit the "Analyze" botton, the program will load the trained
@@ -79,9 +126,10 @@ class Calcium(QWidget):
         self.img_path = self.viewer.layers[0].source.path
 
         #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
-        print("img_size[0] is ", self.img_stack.shape[0], "\nimg_size[1] is ",\
-               self.img_stack.shape[1], "img_size[2] is ", self.img_stack.shape[2])
-        img_size = self.img_stack.shape[2]
+        print("img_size[0] is ", self.img_stack.shape[0])
+        print("img_size[1] is ", self.img_stack.shape[1])
+        print("img_size[2] is ", self.img_stack.shape[-1])
+        img_size = self.img_stack.shape[-1]
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
