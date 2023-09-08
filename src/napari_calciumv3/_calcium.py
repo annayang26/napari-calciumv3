@@ -74,7 +74,14 @@ class Calcium(QWidget):
         self.img_path = None
         self.colors = []
 
-    def _select_folder(self):
+    def _select_folder(self) -> None:
+        '''
+        allow user to select a folder to analyze all the tif file in the folder
+
+        parameters:
+        ------------------
+        None
+        '''
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.Directory)
 
@@ -86,29 +93,12 @@ class Calcium(QWidget):
         for file_name in os.listdir(folder_names[0]):
             if file_name.endswith(".tif"):
                 file_path = os.path.join(folder_names[0], file_name)
-                print("file_path: ", file_path, "len of path: ", len(file_path))
+                print("file_path: ", file_path)
 
-                # img = tff.TiffFile(file_path)
-                # print("len of tiff: ", len(img.series))
-                # img_array = img.series[0].asarray()
-                # print(img_array.shape)
-
-                # # pass each tif file to the viewer/layer
-                # self.viewer.add_image(img_array,
-                #                       name=file_name)
-                # print(len(self.viewer.layers))
-                # print("path: ", self.viewer.layers[0].source.path)
-                # self.img_path = file_path
                 self.viewer.open(file_path)
                 self._on_click()
                 self.save_files()
                 self.clear()
-
-                # self._on_click()
-            # analyze
-            # save the analysis
-            # clear
-            # pass in the next tif file
 
     def _on_click(self) -> None:
         '''
@@ -155,7 +145,6 @@ class Calcium(QWidget):
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
             # print('ROI average prediction:', self.get_ROI_prediction(self.roi_dict, self.prediction_layer.data))
 
-    # NOTE: why return label_layer not assigning to the global variable?
     def segment(self, img_stack, minsize, background_label):
         '''
         Predict the cell bodies using the trained NN model 
