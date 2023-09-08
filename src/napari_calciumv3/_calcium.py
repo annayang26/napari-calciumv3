@@ -95,10 +95,16 @@ class Calcium(QWidget):
                 file_path = os.path.join(folder_names[0], file_name)
                 print("file_path: ", file_path)
 
+                print("Opening the TIF file...")
                 self.viewer.open(file_path)
+                print("shape of the img opened is ", self.img_stack.shape)
+                print("Analyzing...")
                 self._on_click()
+                print("finished analysis")
                 self.save_files()
+                print("Saved the analysis folder")
                 self.clear()
+                print("Start the next analysis")
 
     def _on_click(self) -> None:
         '''
