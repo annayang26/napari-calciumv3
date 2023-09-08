@@ -100,15 +100,16 @@ class Calcium(QWidget):
                 if self.viewer.layers[0].data.ndim > 3:
                     for img in self.viewer.layers[0].data:
                         print("shape of the img is: ", img.shape)
+                        self.viewer.view_image(img)
                 print("shape of the img opened is ", self.viewer.layers[0].data.shape)
 
-                print("Analyzing...")
-                self._on_click()
-                print("finished analysis")
-                self.save_files()
-                print("Saved the analysis folder")
-                self.clear()
-                print("Start the next analysis")
+                # print("Analyzing...")
+                # self._on_click()
+                # print("finished analysis")
+                # self.save_files()
+                # print("Saved the analysis folder")
+                # self.clear()
+                # print("Start the next analysis")
 
     def _on_click(self) -> None:
         '''
