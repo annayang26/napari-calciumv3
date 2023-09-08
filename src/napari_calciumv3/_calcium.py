@@ -101,7 +101,7 @@ class Calcium(QWidget):
                 img = tff.TiffFile(file_path)
                 # print("len of tiff: ", len(img.series))
                 img_array = img.series[0].asarray()
-                # print(img_array.shape)
+                print("img array shape: ", img_array.shape)
 
                 # pass each tif file to the viewer/layer
                 self.viewer.add_image(img_array,
