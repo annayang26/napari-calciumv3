@@ -54,6 +54,7 @@ class Calcium(QWidget):
         self.clear_btn.clicked.connect(self.clear)
         self.layout().addWidget(self.clear_btn)
 
+        self.batch_process = False
         self.img_stack = None
         self.img_name = None
         self.labels = None
@@ -89,26 +90,41 @@ class Calcium(QWidget):
         if dlg.exec_():
             folder_names = dlg.selectedFiles() # list of the path to the folder selected
 
+        self.batch_process = True
+
         # traverse through all the tif files in the selected folder
         for file_name in os.listdir(folder_names[0]):
             if file_name.endswith(".tif"):
                 file_path = os.path.join(folder_names[0], file_name)
                 print("file_path: ", file_path)
 
-                print("Opening the OME.TIF file...")
-                self.viewer.open(file_path)
-                if self.viewer.layers[0].data.ndim > 3:
-                    for page in range(self.viewer.layers[0].data.shape[0]):
-                        self.viewer.add_image(self.viewer.layers[0].data[page])
-                print("shape of the img opened is ", self.viewer.layers[0].data.shape)
+                img = tff.TiffFile(file_path)
+                # print("len of tiff: ", len(img.series))
+                img_array = img.series[0].asarray()
+                # print(img_array.shape)
 
-                # print("Analyzing...")
-                # self._on_click()
-                # print("finished analysis")
-                # self.save_files()
-                # print("Saved the analysis folder")
-                # self.clear()
-                # print("Start the next analysis")
+                # pass each tif file to the viewer/layer
+                self.viewer.add_image(img_array,
+                                      name=file_name)
+                print(len(self.viewer.layers))
+                # print("path: ", self.viewer.layers[0].source.path)
+                self.img_stack = self.viewer.layers[0].data
+                self.img_path = file_path
+                self.img_name = file_name
+                print("Opening the OME.TIF file...")
+                # self.viewer.open(file_path)
+                # if self.viewer.layers[0].data.ndim > 3:
+                #     for page in range(self.viewer.layers[0].data.shape[0]):
+                #         self.viewer.add_image(self.viewer.layers[0].data[page])
+                # print("shape of the img opened is ", self.viewer.layers[0].data.shape)
+
+                print("Analyzing...")
+                self._on_click()
+                print("finished analysis")
+                self.save_files()
+                print("Saved the analysis folder")
+                self.clear()
+                print("Start the next analysis")
 
     def _on_click(self) -> None:
         '''
@@ -121,9 +137,10 @@ class Calcium(QWidget):
         -------------
         None
         '''
-        self.img_stack = self.viewer.layers[0].data
-        self.img_name = self.viewer.layers[0].name
-        self.img_path = self.viewer.layers[0].source.path
+        if not self.batch_process:
+            self.img_stack = self.viewer.layers[0].data
+            self.img_name = self.viewer.layers[0].name
+            self.img_path = self.viewer.layers[0].source.path
 
         #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
         print("img_size[0] is ", self.img_stack.shape[0])
