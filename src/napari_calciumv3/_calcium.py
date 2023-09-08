@@ -112,19 +112,22 @@ class Calcium(QWidget):
                 self.img_path = file_path
                 self.img_name = file_name
                 print("Opening the OME.TIF file...")
+                print("self img stack: ", self.img_stack.shape)
+                print("self img path ", self.img_path)
+                print("self img name: ", self.img_name)
                 # self.viewer.open(file_path)
                 # if self.viewer.layers[0].data.ndim > 3:
                 #     for page in range(self.viewer.layers[0].data.shape[0]):
                 #         self.viewer.add_image(self.viewer.layers[0].data[page])
                 # print("shape of the img opened is ", self.viewer.layers[0].data.shape)
 
-                print("Analyzing...")
-                self._on_click()
-                print("finished analysis")
-                self.save_files()
-                print("Saved the analysis folder")
-                self.clear()
-                print("Start the next analysis")
+                # print("Analyzing...")
+                # self._on_click()
+                # print("finished analysis")
+                # self.save_files()
+                # print("Saved the analysis folder")
+                # self.clear()
+                # print("Start the next analysis")
 
     def _on_click(self) -> None:
         '''
