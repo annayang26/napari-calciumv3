@@ -98,9 +98,8 @@ class Calcium(QWidget):
                 print("Opening the OME.TIF file...")
                 self.viewer.open(file_path)
                 if self.viewer.layers[0].data.ndim > 3:
-                    for img in self.viewer.layers[0].data:
-                        print("shape of the img is: ", img.shape)
-                        self.viewer.add_image(img)
+                    for page in range(self.viewer.layers[0].data.shape):
+                        self.viewer.add_image(self.viewer.layers[0].data[page])
                 print("shape of the img opened is ", self.viewer.layers[0].data.shape)
 
                 # print("Analyzing...")
