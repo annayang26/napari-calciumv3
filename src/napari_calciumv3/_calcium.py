@@ -100,7 +100,7 @@ class Calcium(QWidget):
                 if self.viewer.layers[0].data.ndim > 3:
                     for img in self.viewer.layers[0].data:
                         print("shape of the img is: ", img.shape)
-                        self.viewer.view_image(img)
+                        self.viewer.add_image(img)
                 print("shape of the img opened is ", self.viewer.layers[0].data.shape)
 
                 # print("Analyzing...")
