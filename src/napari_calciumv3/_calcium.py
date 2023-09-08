@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import tifffile as tff
+import zarr
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from qtpy.QtWidgets import (
@@ -101,12 +102,13 @@ class Calcium(QWidget):
                 img = tff.TiffFile(file_path)
                 # print("len of tiff: ", len(img.series))
                 img_array = img.series[0].asarray()
-                print("img array shape: ", img_array.shape)
-                if img_array.ndim > 3:
-                    for one_img in img_array:
-                        self.viewer.add_image(one_img,
-                                      name=file_name)
-                        break
+                img_zarr = zarr.open(img_array.aszarr(), mode='r')
+                print("img array shape: ", img_zarr.shape)
+                # if img_array.ndim > 3:
+                #     for one_img in img_array:
+                #         self.viewer.add_image(one_img,
+                #                       name=file_name)
+                #         break
 
                 # pass each tif file to the viewer/layer
                 # self.viewer.add_image(img_array,
