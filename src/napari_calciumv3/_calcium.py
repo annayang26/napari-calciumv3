@@ -104,7 +104,9 @@ class Calcium(QWidget):
                 print("img array shape: ", img_array.shape)
                 if img_array.ndim > 3:
                     for one_img in img_array:
-                        print(one_img.shape)
+                        self.viewer.add_image(one_img,
+                                      name=file_name)
+                        break
 
                 # pass each tif file to the viewer/layer
                 # self.viewer.add_image(img_array,
