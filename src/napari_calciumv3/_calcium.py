@@ -102,19 +102,22 @@ class Calcium(QWidget):
                 # print("len of tiff: ", len(img.series))
                 img_array = img.series[0].asarray()
                 print("img array shape: ", img_array.shape)
+                if img_array.ndim > 3:
+                    for one_img in img_array:
+                        print(one_img.shape)
 
                 # pass each tif file to the viewer/layer
-                self.viewer.add_image(img_array,
-                                      name=file_name)
-                print(len(self.viewer.layers))
-                # print("path: ", self.viewer.layers[0].source.path)
-                self.img_stack = self.viewer.layers[0].data
-                self.img_path = file_path
-                self.img_name = file_name
-                print("Opening the OME.TIF file...")
-                print("self img stack: ", self.img_stack.shape)
-                print("self img path ", self.img_path)
-                print("self img name: ", self.img_name)
+                # self.viewer.add_image(img_array,
+                #                       name=file_name)
+                # print(len(self.viewer.layers))
+                # # print("path: ", self.viewer.layers[0].source.path)
+                # self.img_stack = self.viewer.layers[0].data
+                # self.img_path = file_path
+                # self.img_name = file_name
+                # print("Opening the OME.TIF file...")
+                # print("self img stack: ", self.img_stack.shape)
+                # print("self img path ", self.img_path)
+                # print("self img name: ", self.img_name)
                 # self.viewer.open(file_path)
                 # if self.viewer.layers[0].data.ndim > 3:
                 #     for page in range(self.viewer.layers[0].data.shape[0]):
