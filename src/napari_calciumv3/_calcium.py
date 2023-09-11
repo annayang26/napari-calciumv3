@@ -99,6 +99,7 @@ class Calcium(QWidget):
             save_path = file_name[0:-4]
             # check if the file has already been analyzed
             if os.path.isdir(save_path):
+                print(f"save_path is {save_path}")
                 continue
 
             if file_name.endswith(".ome.tif"):
