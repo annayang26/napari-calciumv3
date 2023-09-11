@@ -121,6 +121,84 @@ class Calcium(QWidget):
 
         print(f'{folder_names[0]} is done batch processing')
 
+        self._compile_data(folder_names[0])
+
+    def _compile_data(self, base_folder, file_name="summary.txt",
+                    variable=None, compile_name="compile_data.csv"):
+        '''
+        to compile all the data from different folders into one csv file
+        options to include the line name and the variable name(s) to look for; 
+        otherwise the programs finds the average amplitude in all the summary.txt
+
+        parameters:
+        ------------
+        base_folder: str. the name of the base folder
+        compile_name: str. optional.
+            the name of the final file that has all the data
+            default to compiled_file.txt
+        folder_prefix: str. optional
+            the prefix of the folders that has data to analyze
+            e.g. NC230802
+        file_name: str. optional
+            the name of the file to pull data from
+            default to summary.txt
+        variable: list of str. optional. Be specific!
+            a list of str that the user wants from each data file
+            default to average amplitude
+
+        returns:
+        ------------
+        None
+        '''
+        if variable is None:
+            variable = ["Total ROI", "Percent Active ROI", "Average Amplitude", "Amplitude Standard Deviation",
+                        "Average Max Slope", "Max Slope Standard Deviation", "Average Time to Rise",
+                        "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
+                        "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
+                        "Frequency", "Global Connectivity"]
+
+        dir_list = []
+
+        for (dir_path, _dir_names, file_names) in os.walk(base_folder):
+            if file_name in file_names:
+                dir_list.append(dir_path)
+
+        files = []
+
+        # traverse through all the matching files
+        for dir_name in dir_list:
+            result = open(dir_name + "/" + file_name)
+            data = {}
+            data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+
+            # find the variable in the file
+            for line in result:
+                for var in variable:
+                    if var.lower().strip() in line.lower():
+                        if var not in data:
+                            data[var] = []
+                        items = line.split(":")
+                        for item in items:
+                            if any(char.isdigit() for char in item):
+                                data[var] = item
+
+            if len(data) > 1:
+                files.append(data)
+            else:
+                print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
+
+        if len(files) > 0:
+            # write into a new csv file
+            field_names = ["name"]
+            field_names.extend(variable)
+
+            with open(base_folder + "/" + compile_name, 'w') as c_file:
+                writer = csv.DictWriter(c_file, fieldnames=field_names)
+                writer.writeheader()
+                writer.writerows(files)
+        else:
+            print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
+
     def _on_click(self) -> None:
         '''
         once hit the "Analyze" botton, the program will load the trained
