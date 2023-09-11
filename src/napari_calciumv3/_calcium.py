@@ -95,6 +95,12 @@ class Calcium(QWidget):
 
         # traverse through all the ome.tif files in the selected folder
         for file_name in os.listdir(folder_names[0]):
+
+            save_path = self.img_path[0:-4]
+            # check if the file has already been analyzed
+            if os.path.isdir(save_path):
+                continue
+
             if file_name.endswith(".ome.tif"):
                 file_path = os.path.join(folder_names[0], file_name)
                 print("file_path: ", file_path)
