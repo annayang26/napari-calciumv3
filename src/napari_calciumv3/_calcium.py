@@ -99,7 +99,7 @@ class Calcium(QWidget):
                 file_path = os.path.join(folder_names[0], file_name)
                 print("file_path: ", file_path)
 
-                img = tff.TiffFile(file_path)
+                img = tff.imread(file_path, is_ome=False)
                 # print("len of tiff: ", len(img.series))
                 img_array = img.series[0]
                 img_zarr = zarr.open(img_array.aszarr(), mode='r')
