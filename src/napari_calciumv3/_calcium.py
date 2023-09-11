@@ -101,9 +101,9 @@ class Calcium(QWidget):
 
                 img = tff.imread(file_path, is_ome=False)
                 # print("len of tiff: ", len(img.series))
-                img_array = img.series[0]
-                img_zarr = zarr.open(img_array.aszarr(), mode='r')
-                print("img array shape: ", img_zarr.shape)
+                # img_array = img.series[0]
+                # img_zarr = zarr.open(img_array.aszarr(), mode='r')
+                print("img array shape: ", img.shape)
                 # if img_array.ndim > 3:
                 #     for one_img in img_array:
                 #         self.viewer.add_image(one_img,
@@ -111,30 +111,30 @@ class Calcium(QWidget):
                 #         break
 
                 # pass each tif file to the viewer/layer
-                self.viewer.add_image(img_zarr,
+                self.viewer.add_image(img,
                                       name=file_name)
-                print(len(self.viewer.layers))
-                # # print("path: ", self.viewer.layers[0].source.path)
-                self.img_stack = self.viewer.layers[0].data
-                self.img_path = file_path
-                self.img_name = file_name
-                print("Opening the OME.TIF file...")
-                print("self img stack: ", self.img_stack.shape)
-                print("self img path ", self.img_path)
-                print("self img name: ", self.img_name)
-                # self.viewer.open(file_path)
-                # if self.viewer.layers[0].data.ndim > 3:
-                #     for page in range(self.viewer.layers[0].data.shape[0]):
-                #         self.viewer.add_image(self.viewer.layers[0].data[page])
-                # print("shape of the img opened is ", self.viewer.layers[0].data.shape)
+                # print(len(self.viewer.layers))
+                # # # print("path: ", self.viewer.layers[0].source.path)
+                # self.img_stack = self.viewer.layers[0].data
+                # self.img_path = file_path
+                # self.img_name = file_name
+                # print("Opening the OME.TIF file...")
+                # print("self img stack: ", self.img_stack.shape)
+                # print("self img path ", self.img_path)
+                # print("self img name: ", self.img_name)
+                # # self.viewer.open(file_path)
+                # # if self.viewer.layers[0].data.ndim > 3:
+                # #     for page in range(self.viewer.layers[0].data.shape[0]):
+                # #         self.viewer.add_image(self.viewer.layers[0].data[page])
+                # # print("shape of the img opened is ", self.viewer.layers[0].data.shape)
 
-                print("Analyzing...")
-                self._on_click()
-                print("finished analysis")
-                self.save_files()
-                print("Saved the analysis folder")
-                self.clear()
-                print("Start the next analysis")
+                # print("Analyzing...")
+                # self._on_click()
+                # print("finished analysis")
+                # self.save_files()
+                # print("Saved the analysis folder")
+                # self.clear()
+                # print("Start the next analysis")
 
     def _on_click(self) -> None:
         '''
