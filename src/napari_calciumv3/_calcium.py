@@ -133,7 +133,7 @@ class Calcium(QWidget):
                 # print("finished analysis")
                 # self.save_files()
                 # print("Saved the analysis folder")
-                # self.clear()
+                self.clear()
                 # print("Start the next analysis")
 
     def _on_click(self) -> None:
