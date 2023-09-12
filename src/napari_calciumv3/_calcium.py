@@ -1,0 +1,1318 @@
+import csv
+import importlib.resources
+import json
+import os
+from typing import TYPE_CHECKING
+
+import numpy as np
+import tifffile as tff
+import zarr
+from matplotlib.backends.backend_qt5agg import FigureCanvas
+from matplotlib.figure import Figure
+from qtpy.QtWidgets import (
+    QFileDialog,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+from scipy import ndimage as ndi
+from skimage import feature, filters, morphology, segmentation
+
+if TYPE_CHECKING:
+    import napari
+
+class Calcium(QWidget):
+    # your QWidget.__init__ can optionally request the napari viewer instance
+    # in one of
+    # 1. use a parameter called `napari_viewer`, as done here
+    # 2. use a type annotation of 'napari.viewer.Viewer' for any parameter
+    def __init__(self, napari_viewer) -> None:
+        super().__init__()
+        self.viewer = napari_viewer
+        self.setLayout(QVBoxLayout())
+
+        self.bp_btn = QPushButton("Select a Folder")
+        self.bp_btn.clicked.connect(self._select_folder)
+        self.layout().addWidget(self.bp_btn)
+
+        btn = QPushButton("Analyze")
+        btn.clicked.connect(self._on_click)
+        self.layout().addWidget(btn)
+
+        self.canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.axes = self.canvas_traces.figure.subplots()
+        self.layout().addWidget(self.canvas_traces)
+
+        self.canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.axes_just_traces = self.canvas_just_traces.figure.subplots()
+
+        self.save_btn = QPushButton("Save")
+        self.save_btn.clicked.connect(self.save_files)
+        self.layout().addWidget(self.save_btn)
+
+        self.clear_btn = QPushButton("Clear")
+        self.clear_btn.clicked.connect(self.clear)
+        self.layout().addWidget(self.clear_btn)
+
+        self.batch_process = False
+        self.img_stack = None
+        self.img_name = None
+        self.labels = None
+        self.label_layer = None
+        self.model_unet = None
+        self.prediction_layer = None
+        self.roi_dict = None
+        self.roi_signal = None
+        self.roi_dff = None
+        self.median = None
+        self.bg = None
+        self.spike_times = None
+        self.max_correlations = None
+        self.max_cor_templates = None
+        self.roi_analysis = None
+        self.framerate = None
+        self.mean_connect = None
+        self.img_path = None
+        self.colors = []
+
+    def _select_folder(self) -> None:
+        '''
+        allow user to select a folder to analyze all the tif file in the folder
+
+        parameters:
+        ------------------
+        None
+        '''
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.Directory)
+
+        # NOTE: trying for one experiemnt folder
+        if dlg.exec_():
+            folder_names = dlg.selectedFiles() # list of the path to the folder selected
+
+        self.batch_process = True
+
+        # traverse through all the ome.tif files in the selected folder
+        for file_name in os.listdir(folder_names[0]):
+
+            save_path = file_name[0:-4]
+            # check if the file has already been analyzed
+            if os.path.isdir(save_path):
+                print(f"save_path is {save_path}")
+                continue
+
+            if file_name.endswith(".ome.tif"):
+                file_path = os.path.join(folder_names[0], file_name)
+                print("file_path: ", file_path)
+
+                img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                print("img array shape: ", img.shape)
+                self.viewer.add_image(img,
+                                      name=file_name)
+
+                self.img_stack = self.viewer.layers[0].data
+                self.img_path = file_path
+                self.img_name = file_name
+                print("Opening the OME.TIF file...")
+                print("self img stack: ", self.img_stack.shape)
+                print("self img path ", self.img_path)
+                print("self img name: ", self.img_name)
+
+                print("Analyzing...")
+                self._on_click()
+                print("finished analysis")
+                self.save_files()
+                print("Saved the analysis folder")
+                self.clear()
+
+        print(f'{folder_names[0]} is done batch processing')
+
+        self._compile_data(folder_names[0])
+
+    def _compile_data(self, base_folder, file_name="summary.txt",
+                    variable=None, compile_name="compile_data.csv"):
+        '''
+        to compile all the data from different folders into one csv file
+        options to include the line name and the variable name(s) to look for; 
+        otherwise the programs finds the average amplitude in all the summary.txt
+
+        parameters:
+        ------------
+        base_folder: str. the name of the base folder
+        compile_name: str. optional.
+            the name of the final file that has all the data
+            default to compiled_file.txt
+        folder_prefix: str. optional
+            the prefix of the folders that has data to analyze
+            e.g. NC230802
+        file_name: str. optional
+            the name of the file to pull data from
+            default to summary.txt
+        variable: list of str. optional. Be specific!
+            a list of str that the user wants from each data file
+            default to average amplitude
+
+        returns:
+        ------------
+        None
+        '''
+        if variable is None:
+            variable = ["Total ROI", "Percent Active ROI", "Average Amplitude", "Amplitude Standard Deviation",
+                        "Average Max Slope", "Max Slope Standard Deviation", "Average Time to Rise",
+                        "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
+                        "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
+                        "Frequency", "Global Connectivity"]
+
+        dir_list = []
+
+        for (dir_path, _dir_names, file_names) in os.walk(base_folder):
+            if file_name in file_names:
+                dir_list.append(dir_path)
+
+        files = []
+
+        # traverse through all the matching files
+        for dir_name in dir_list:
+            result = open(dir_name + "/" + file_name)
+            data = {}
+            data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+
+            # find the variable in the file
+            for line in result:
+                for var in variable:
+                    if var.lower().strip() in line.lower():
+                        if var not in data:
+                            data[var] = []
+                        items = line.split(":")
+                        for item in items:
+                            if any(char.isdigit() for char in item):
+                                data[var] = item
+
+            if len(data) > 1:
+                files.append(data)
+            else:
+                print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
+
+        if len(files) > 0:
+            # write into a new csv file
+            field_names = ["name"]
+            field_names.extend(variable)
+
+            with open(base_folder + "/" + compile_name, 'w') as c_file:
+                writer = csv.DictWriter(c_file, fieldnames=field_names)
+                writer.writeheader()
+                writer.writerows(files)
+        else:
+            print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
+
+    def _on_click(self) -> None:
+        '''
+        once hit the "Analyze" botton, the program will load the trained
+        neural network model based on the image size and call the functions
+        -- segment, ROI intensity, DFF, find peaks, analyze ROI, connectivity--
+        to analyze the image stacks and plot the data
+
+        Parameter:
+        -------------
+        None
+        '''
+        if not self.batch_process:
+            self.img_stack = self.viewer.layers[0].data
+            self.img_name = self.viewer.layers[0].name
+            self.img_path = self.viewer.layers[0].source.path
+
+        #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
+        print("img_size[0] is ", self.img_stack.shape[0])
+        print("img_size[1] is ", self.img_stack.shape[1])
+        print("img_size[-1] is ", self.img_stack.shape[-1])
+        img_size = self.img_stack.shape[-1]
+
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+
+
+        import tensorflow as tf
+        import tensorflow.keras.backend as K
+
+        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+        background_layer = 0
+        minsize = 100
+        self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+
+        if self.label_layer:
+            self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+            self.roi_dff = self.calculateDFF(self.roi_signal)
+
+            spike_templates_file = 'spikes.json'
+            self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.80)
+            self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+            self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+
+            self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
+            # print('ROI average prediction:', self.get_ROI_prediction(self.roi_dict, self.prediction_layer.data))
+
+    def segment(self, img_stack, minsize, background_label):
+        '''
+        Predict the cell bodies using the trained NN model 
+        and further segment after removing small holes and objects
+
+        Parameters:
+        -------------
+        img_stack: ndarray. shape=(# of frames, # of rows, # of colomns) array of the images
+        minsize: float or int. the threshold to determine if the predicted cell body is too small
+        background_label: int. the value set to be the background
+
+        Return:
+        -------------
+        labels: ndarray. shape= shape of img_stack. a labeled matrix of segmentations of the same type as markers
+        label_layer: ndarray. the label/segmentation layer image
+        roi_dict: dict. a dictionary of label-position pairs
+        '''
+        img_norm = np.max(img_stack, axis=0) / np.max(img_stack)
+        img_predict = self.model_unet.predict(img_norm[np.newaxis, :, :])[0, :, :]
+
+        if np.max(img_predict) > 0.3:
+            # the prediction layer shows the prediction of the NN
+            self.prediction_layer = self.viewer.add_image(img_predict, name='Prediction')
+
+            # use Otsu's method to find the cooridnates of the cell bodies
+            th = filters.threshold_otsu(img_predict)
+            img_predict_th = img_predict > th
+            img_predict_remove_holes_th = morphology.remove_small_holes(img_predict_th, area_threshold=minsize * 0.3)
+            img_predict_filtered_th = morphology.remove_small_objects(img_predict_remove_holes_th, min_size=minsize)
+            distance = ndi.distance_transform_edt(img_predict_filtered_th)
+            local_max = feature.peak_local_max(distance,
+                                               min_distance=10,
+                                               footprint=np.ones((15, 15)),
+                                               labels=img_predict_filtered_th)
+
+            # create masks over the predicted cell bodies and add a segmentation layer
+            local_max_mask = np.zeros_like(img_predict_filtered_th, dtype=bool)
+            local_max_mask[tuple(local_max.T)] = True
+            markers = morphology.label(local_max_mask)
+            labels = segmentation.watershed(-distance, markers, mask=img_predict_filtered_th)
+            roi_dict, labels = self.getROIpos(labels, background_label)
+            label_layer = self.viewer.add_labels(labels, name='Segmentation', opacity=1)
+        else:
+            self.general_msg('No ROI', 'There were no cells detected')
+            labels, label_layer, roi_dict = None, None, None
+
+        return labels, label_layer, roi_dict
+
+    def getROIpos(self, labels, background_label):
+        '''
+        to get the positions of the labels without the background labels
+
+        Parameters:
+        -------------
+        labels: ndarray. shape=(# of rows in image, # of col in image). an array of the labels created after prediciton and segmentation
+        background_label: int. the value set to be background
+
+        Returns:
+        -------------
+        roi_dict: dict. a dictionary of label-position pairs
+        labels: ndarray. shape=() updated labels without the small ROIs
+        '''
+        # sort the labels and filter the unique ones
+        u_labels = np.unique(labels)
+
+        # create a dict for the labels
+        roi_dict = {}
+        for u in u_labels:
+            roi_dict[u.item()] = []
+
+        # record the coordinates for each label
+        for x in range(labels.shape[0]):
+            for y in range(labels.shape[1]):
+                roi_dict[labels[x, y]].append([x, y])
+
+        # delete any background labels
+        del roi_dict[background_label]
+
+        # print("roi_dict len:", len(roi_dict))
+        area_dict, roi_to_delete = self.get_ROI_area(roi_dict, 100)
+        # print("area_dict:", area_dict)
+
+        # delete roi in label layer and dict
+        for r in roi_to_delete:
+            coords_to_delete = np.array(roi_dict[r]).T.tolist()
+            labels[tuple(coords_to_delete)] = 0
+            roi_dict[r] = []
+
+        # move roi in roi_dict after removing some labels
+        for r in range(1, (len(roi_dict) - len(roi_to_delete) + 1)):
+            i = 1
+            while not roi_dict[r]:
+                roi_dict[r] = roi_dict[r + i]
+                roi_dict[r + i] = []
+                i += 1
+
+        # delete extra roi keys
+        for r in range((len(roi_dict) - len(roi_to_delete) + 1), (len(roi_dict) + 1)):
+            del roi_dict[r]
+
+        # update label layer with new roi
+        for r in roi_dict:
+            roi_coords = np.array(roi_dict[r]).T.tolist()
+            labels[tuple(roi_coords)] = r
+        # print("new roi_dict len:", len(roi_dict))
+        return roi_dict, labels
+
+    def get_ROI_area(self, roi_dict, threshold):
+        '''
+        to get the areas of each ROI in the ROI_dict
+
+        Parameters:
+        ------------
+        roi_dict: dict. the dictionary of the segmented ROIs
+        threshold: float or int. The value below which the segmentation would be considered small
+
+        Returns:
+        -----------
+        area: dict. a dictionary of the length of the coordinates (?) in the roi_dict
+        small_roi: list. a list of small rois if their coordinates are smaller than the set threshold
+        '''
+        area = {}
+        small_roi = []
+        for r in roi_dict:
+            area[r] = len(roi_dict[r])
+            if area[r] < threshold:
+                small_roi.append(r)
+        return area, small_roi
+
+    #TODO: fill out the documentation
+    def get_ROI_prediction(self, roi_dict, prediction):
+        '''
+        get the average prediction of the s
+
+        Parameters:
+        --------------
+        roi_dict:
+        prediction:
+
+        Returns:
+        --------------
+        avg_pred:
+        '''
+        avg_pred = {}
+        for r in roi_dict:
+            roi_coords = np.array(roi_dict[r]).T.tolist()
+            avg_pred[r] = np.mean(prediction[tuple(roi_coords)])
+        return avg_pred
+
+    def calculate_ROI_intensity(self, roi_dict, img_stack):
+        '''
+        calculate the average intensity of each roi
+
+        parameters:
+        --------------
+        roi_dict: dict. a dictionary of label (int)-coordinates (list of (x,y) coords) pairs
+        img_stack: ndarray. shape=(# frames, # rows, # cols). an ndarray of the image
+
+        returns:
+        ---------------
+        f: dict. the label (int)-intensity (a list of averaged intensity across 
+            all the pixels with the same label at each frame) pair segmemted
+        '''
+        f = {}
+        for r in roi_dict:
+            f[r] = np.zeros(img_stack.shape[0])
+            roi_coords = np.array(roi_dict[r]).T.tolist()
+            for z in range(img_stack.shape[0]):
+                img_frame = img_stack[z, :, :]
+                f[r][z] = np.mean(img_frame[tuple(roi_coords)])
+        return f
+
+    def calculateDFF(self, roi_signal):
+        '''
+        to calculate the change in intensity compared to the background fluorescence signal
+
+        parameters:
+        --------------
+        roi_signal: dict. the label (int)-intensity (a list of averaged intensity \
+            across all the pixels with the same label at each frame) pair segmemted
+
+        returns:
+        --------------
+        dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+
+        '''
+        dff = {}
+        self.median = {}
+        self.bg = {}
+        for n in roi_signal:
+            background, self.median[n] = self.calculate_background(roi_signal[n], 200)
+            self.bg[n] = background.tolist()
+            dff[n] = (roi_signal[n] - background) / background
+            dff[n] = dff[n] - np.min(dff[n])
+        return dff
+
+    def calculate_background(self, f, window):
+        '''
+        calculate the background fluorescence intensity based on the average of a specific number of 
+            windows at the beginning
+
+        parameters:
+        -------------
+        f: array. list of averaged intensity at each frame for pixels with the same label
+        window: int. the size of the window to average the pixel intensity from.
+
+        returns:
+        -------------
+        background: array. the pixels in the specified window that is below mean intensity
+        median: the median of the pixels in the specified window
+        '''
+
+        background = np.zeros_like(f)
+        background[0] = f[0]
+        median = [background[0]]
+        for y in range(1, len(f)):
+            x = y - window
+            if x < 0:
+                x = 0
+            lower_quantile = f[x:y] <= np.median(f[x:y])
+            background[y] = np.mean(f[x:y][lower_quantile])
+            median.append(np.median(f[x:y]))
+        return background, median
+
+    #TODO: finish the documentation here
+    def plot_values(self, dff, labels, layer, spike_times) -> None:
+        '''
+
+        parameters:
+        --------------
+        dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        labels:
+        layer:
+        spike_times:
+
+        returns:
+        --------------
+        None
+
+        '''
+        for i in range(1, np.max(labels) + 1):
+            color = layer.get_color(i)
+            color = (color[0], color[1], color[2], color[3])
+            self.colors.append(color)
+
+        roi_to_plot = []
+        colors_to_plot = []
+        for i, r in enumerate(spike_times):
+            if len(spike_times[r]) > 0:
+                roi_to_plot.append(r)
+                colors_to_plot.append(self.colors[i])
+
+        if len(roi_to_plot) > 0:
+            print('Active ROI:', roi_to_plot)
+            self.axes.set_prop_cycle(color=colors_to_plot)
+            self.axes_just_traces.set_prop_cycle(color=colors_to_plot)
+
+            dff_max = np.zeros(len(roi_to_plot))
+            for dff_index, dff_key in enumerate(roi_to_plot):
+                dff_max[dff_index] = np.max(dff[dff_key])
+            height_increment = max(dff_max)
+
+            for height_index, d in enumerate(roi_to_plot):
+                self.axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
+                self.axes.plot(dff[d] + height_index * (1.2 * height_increment))
+                if len(spike_times[d]) > 0:
+                    self.axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
+                                   ms=2, color='k', marker='o', ls='')
+                self.canvas_traces.draw_idle()
+                self.canvas_just_traces.draw_idle()
+        else:
+            self.general_msg('No activity', 'No calcium events were detected for any ROI')
+
+    # TODO: finish the documentation
+    def find_peaks(self, roi_dff, template_file, spk_threshold, reset_threshold):
+        '''
+
+        parameters:
+        --------------
+        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        template_file: str. the template file for spikes
+        spk_threshold: float. threshold for determining if the spike \
+            is correlated with the template
+        reset_threshold:
+
+        returns:
+        --------------
+        spike_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+
+        '''
+        # open the template file
+        f = importlib.resources.open_text(__package__, template_file)
+        spike_templates = json.load(f)
+        spike_times = {}
+        self.max_correlations = {}
+        self.max_cor_templates = {}
+        max_temp_len = max([len(temp) for temp in spike_templates.values()])
+
+        # calculate the corelation between the dff of one label at each frame
+        #   with each of the template
+        # iterate through each label
+        for r in roi_dff:
+            # print("\n", r)
+            m = np.zeros((len(roi_dff[r]), len(spike_templates)))
+            roi_dff_pad = np.pad(roi_dff[r], (0, (max_temp_len - 1)), mode='constant')
+            for spike_template_index, spk_temp in enumerate(spike_templates):
+                for i in range(len(roi_dff[r])):
+                    p = np.corrcoef(roi_dff_pad[i:(i + len(spike_templates[spk_temp]))],
+                                    spike_templates[spk_temp])
+                    m[i, spike_template_index] = p[0, 1]
+
+
+            spike_times[r] = []
+            spike_correlations = np.max(m, axis=1)
+            self.max_correlations[r] = spike_correlations
+            self.max_cor_templates[r] = np.argmax(m, axis=1) + 1
+
+            j = 0
+            # iterate through frame in one label
+            while j < len(spike_correlations):
+                if spike_correlations[j] > spk_threshold:
+                    s_max = j
+                    loop = True
+                    # print(f'start loop at {j}')
+
+                    # find the frame for the peak
+                    # iterate through the correlation between each pixel with the temp
+                    while loop:
+                        while spike_correlations[j + 1] > reset_threshold:
+                            if spike_correlations[j + 1] > spike_correlations[s_max]:
+                                s_max = j + 1
+                            j += 1
+                        if spike_correlations[j + 2] > reset_threshold:
+                            j += 1
+                        else:
+                            loop = False
+                    # print(f'end loop at {j} with s_max of {s_max}')
+
+                    # find the amplitude
+                    window_start = max(0, (s_max - 5))
+                    window_end = min((len(roi_dff[r]) - 1), (s_max + 15))
+                    window = roi_dff[r][window_start:window_end]
+                    peak_height = np.max(window) - np.min(window)
+                    # print(peak_height)
+                    if peak_height > 0.02:
+                        spike_times[r].append(s_max)
+                j += 1
+
+            # the consecutive peaks should not be closer in frame
+            if len(spike_times[r]) >= 2:
+                for k in range(len(spike_times[r]) - 1):
+                    if spike_times[r][k] is not None and \
+                        (spike_times[r][k + 1] - spike_times[r][k]) <= 10:
+                            spike_times[r][k + 1] = None
+                spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
+
+        return spike_times
+
+    def analyze_ROI(self, roi_dff, spk_times):
+        '''
+        to analyze the labeled ROI
+
+        parameters:
+        --------------
+        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+
+        returns:
+        --------------
+        roi_analysis: dict. label - dict pair (amplitude, peak_indices,
+            base_indices, spike_times, time_to_rise, max_slope)
+        framerate: float. 1/ exposure
+        '''
+        metadata_file = self.img_path[0:-8] + '_metadata.txt'
+        framerate = 0
+
+        if os.path.exists(metadata_file):
+            with open(metadata_file) as f:
+                metadata = f.readlines()
+
+            for line in metadata:
+                line = line.strip()
+                if line.startswith('"Exposure-ms": '):
+                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
+                    framerate = 1 / exposure  # frames/second
+                    break
+        # print('framerate is:', framerate, 'frames/second')
+
+        amplitude_info = self.get_amplitude(roi_dff, spk_times)
+        time_to_rise = self.get_time_to_rise(amplitude_info, framerate)
+        max_slope = self.get_max_slope(roi_dff, amplitude_info)
+        IEI = self.analyze_IEI(spk_times, framerate)
+        roi_analysis = amplitude_info
+
+        for r in roi_analysis:
+            roi_analysis[r]['spike_times'] = spk_times[r]
+            roi_analysis[r]['time_to_rise'] = time_to_rise[r]
+            roi_analysis[r]['max_slope'] = max_slope[r]
+            roi_analysis[r]['IEI'] = IEI[r]
+
+        # print(roi_analysis)
+        return roi_analysis, framerate
+
+    def get_amplitude(self, roi_dff, spk_times, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
+        '''
+        find the locations (frames) of the peaks, with the peak indices and base indices
+
+        parameters:
+        --------------
+        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+        deriv_threshold: float. optional.
+        reset_num: int. optional.
+            the threshold to stop the searching for the index
+        neg_rest_num: int. optional.
+            the threshold to stop the subsearching to address the collision with other spikes
+        total_dist: int. optional.
+            the maximum search that the program will attempt to search for the index
+
+        returns:
+        --------------
+        amplitude_info: dict. label (int) - dict[amplitude, peak_indices, base_indices]
+
+        '''
+        amplitude_info = {}
+
+        # for each ROI
+        for r in spk_times:
+            amplitude_info[r] = {}
+            amplitude_info[r]['amplitudes'] = []
+            amplitude_info[r]['peak_indices'] = []
+            amplitude_info[r]['base_indices'] = []
+
+            if len(spk_times[r]) > 0:
+                dff_deriv = np.diff(roi_dff[r]) # the difference between each spike
+                # print(f'ROI {r} spike times: {spk_times[r]}')
+
+                # for each spike in the ROI
+                for i in range(len(spk_times[r])):
+                    # Search for starting index for current spike
+                    searching = True
+                    under_thresh_count = 0
+                    total_count = 0
+                    start_index = spk_times[r][i] # the frame for the first spike
+
+                    if start_index > 0:
+                        while searching:
+                            start_index -= 1
+                            total_count += 1
+
+                            # If collide with a new spike
+                            if start_index in spk_times[r]:
+                                subsearching = True
+                                negative_count = 0
+
+                                while subsearching:
+                                    start_index += 1
+                                    if dff_deriv[start_index] < 0:
+                                        negative_count += 1
+
+                                    # TODO: maybe don't need this else statement?
+                                    else:
+                                        negative_count = 0
+
+                                    if negative_count == neg_reset_num:
+                                        subsearching = False
+                                break
+
+                            # if the difference is below threshold
+                            if dff_deriv[start_index] < deriv_threhold:
+                                under_thresh_count += 1
+                            else:
+                                under_thresh_count = 0
+
+                            # stop searching for starting index 
+                            # NOTE: changed the operator from == to >=
+                            if under_thresh_count >= reset_num or start_index == 0 or total_count == total_dist:
+                                searching = False
+
+                    # Search for ending index for current spike
+                    searching = True
+                    under_thresh_count = 0
+                    total_count = 0
+                    end_index = spk_times[r][i]
+
+                    if end_index < (len(dff_deriv) - 1):
+                        while searching:
+                            end_index += 1
+                            total_count += 1
+
+                            # If collide with a new spike
+                            if end_index in spk_times[r]:
+                                subsearching = True
+                                negative_count = 0
+                                while subsearching:
+                                    end_index -= 1
+                                    if dff_deriv[end_index] < 0:
+                                        negative_count += 1
+                                    else:
+                                        negative_count = 0
+                                    if negative_count == neg_reset_num:
+                                        subsearching = False
+                                break
+                            if dff_deriv[end_index] < deriv_threhold:
+                                under_thresh_count += 1
+                            else:
+                                under_thresh_count = 0
+
+                            # NOTE: changed the operator from == to >=
+                            if under_thresh_count >= reset_num or end_index >= (len(dff_deriv) - 1) or \
+                                    total_count == total_dist:
+                                searching = False
+                    # print(f'ROI {r} spike {i} - start_index: {start_index}, end_index: {end_index}')
+
+                    # Save data
+                    # NOTE: why separate the spikes from the spike? 
+                    spk_to_end = roi_dff[r][spk_times[r][i]:(end_index + 1)]
+                    start_to_spk = roi_dff[r][start_index:(spk_times[r][i] + 1)]
+                    amplitude_info[r]['amplitudes'].append(np.max(spk_to_end) - np.min(start_to_spk)) 
+                    amplitude_info[r]['peak_indices'].append(int(spk_times[r][i] + np.argmax(spk_to_end)))
+                    amplitude_info[r]['base_indices'].append(int(spk_times[r][i] -
+                                                                 (len(start_to_spk) - (np.argmin(start_to_spk) + 1))))
+
+        # for r in amplitude_info:
+        #     print('ROI', r)
+        #     print('amp:', amplitude_info[r]['amplitudes'])
+        #     print('peak:', amplitude_info[r]['peak_indices'])
+        #     print('base:', amplitude_info[r]['base_indices'])
+        return amplitude_info
+
+    def get_time_to_rise(self, amplitude_info, framerate):
+        '''
+        get a list of time to rise for each peak throughout all the frames
+
+        parameters:
+        ---------------
+        amplitude_info: dict. label (int) - dict[amplitude, peak_indices, base_indices]
+        framerate: float. 1 / exposure
+
+        returns:
+        ---------------
+        time_to_rise: dict. label (int) - list of time (frames/framerate) or frames (peak_index-base_index + 1) pair
+
+        '''
+        time_to_rise = {}
+        for r in amplitude_info:
+            time_to_rise[r] = []
+            if len(amplitude_info[r]['peak_indices']) > 0:
+                for i in range(len(amplitude_info[r]['peak_indices'])):
+                    peak_index = amplitude_info[r]['peak_indices'][i]
+                    base_index = amplitude_info[r]['base_indices'][i]
+                    frames = peak_index - base_index + 1
+                    if framerate:
+                        time = frames / framerate  # frames * (seconds/frames) = seconds
+                        time_to_rise[r].append(time)
+                    else:
+                        time_to_rise[r].append(frames)
+
+        # print('time to rise:', time_to_rise)
+        return time_to_rise
+
+    def get_max_slope(self, roi_dff, amplitude_info):
+        '''
+        calculate the maximum slope of each peak of each label
+
+        parameters:
+        --------------
+        roi_diff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        amplitude_info: dict. label (int) - dict[amplitude, peak_indices, base_indices] 
+
+        returns:
+        --------------
+        max_slope: dict. label (int) - list of maximum slope for each peak
+
+        '''
+        max_slope = {}
+        for r in amplitude_info:
+            max_slope[r] = []
+            dff_deriv = np.diff(roi_dff[r])
+            if len(amplitude_info[r]['peak_indices']) > 0:
+                for i in range(len(amplitude_info[r]['peak_indices'])):
+                    peak_index = amplitude_info[r]['peak_indices'][i]
+                    base_index = amplitude_info[r]['base_indices'][i]
+                    slope_window = dff_deriv[base_index:(peak_index + 1)]
+                    max_slope[r].append(np.max(slope_window))
+
+        return max_slope
+
+    def analyze_IEI(self, spk_times, framerate):
+        '''
+        calculate the inter-event interval (IEI)
+
+        parameters:
+        --------------
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+        framerate: float. 1 / exposure
+
+        returns:
+        --------------
+        IEI: dict. label (int)- IEI_time or IEI_frame (float) 
+        '''
+        IEI = {}
+        for r in spk_times:
+            IEI[r] = []
+
+            if len(spk_times[r]) > 1:
+                IEI_frames = np.mean(np.diff(np.array(spk_times[r])))
+                if framerate:
+                    IEI_time = IEI_frames / framerate # in seconds
+                    IEI[r].append(IEI_time)
+                else:
+                    IEI[r].append(IEI_frames)
+        return IEI
+
+    def analyze_active(self, spk_times):
+        '''
+        calculate the percentage of active cell bodies
+
+        parameters:
+        -------------
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int) 
+
+        returns:
+        -------------
+        active: float. percentage of active cells (with mspikes detected)
+
+        '''
+        active = 0
+        for r in spk_times:
+            if len(spk_times[r]) > 0:
+                active += 1
+        active = (active / len(spk_times)) * 100
+        return active
+
+    def get_mean_connect(self, roi_dff, spk_times):
+        '''
+        calculate functional connectivity described in Afshar Saber et al. 2018.
+
+        parameters:
+        -------------
+        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+
+        returns:
+        -------------
+        mean_connect: float. the mean connectivity among all ROIs
+        '''
+        A = self.get_connect_matrix(roi_dff, spk_times)
+
+        if A is not None:
+            if len(A) > 1:
+                mean_connect = np.median(np.sum(A, axis=0) - 1) / (len(A) - 1)
+            else:
+                mean_connect = 'N/A - Only one active ROI'
+        else:
+            mean_connect = 'No calcium events detected'
+
+        return mean_connect
+
+    def get_connect_matrix(self, roi_dff, spk_times):
+        '''
+        to calculate a matrix of synchronizatiion index described in Patel et al. 2015
+
+        parameters:
+        --------------
+        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
+
+        returns:
+        --------------
+        connect_matrix: NDarray. shape =(N, N), where N= total number of active ROIs
+            a matrix of synchronization index between each peak of the ROIs
+        '''
+        # a list of ROI labels when it has spikes through out the frames
+        active_roi = [r for r in spk_times if len(spk_times[r]) > 0]
+
+        if len(active_roi) > 0:
+            phases = {}
+            for r in active_roi:
+                phases[r] = self.get_phase(len(roi_dff[r]), spk_times[r])
+
+            connect_matrix = np.zeros((len(active_roi), len(active_roi)))
+            for i, r1 in enumerate(active_roi):
+                for j, r2 in enumerate(active_roi):
+                    connect_matrix[i, j] = self.get_sync_index(phases[r1], phases[r2])
+        else:
+            connect_matrix = None
+
+        return connect_matrix
+
+    def get_sync_index(self, x_phase, y_phase):
+        '''
+        to calculate the pair-wise synchronization index of the two ROIs
+
+        parameters:
+        --------------
+        x_phase: list. list of instantaneous phase (float) over time for ROI x
+        y_phase: list. list of instantaneous phase (float) over time for ROI y
+
+        returns:
+        --------------
+        sync_index: float. the pair-wise synchronization index of the two ROIs
+
+        '''
+        phase_diff = self.get_phase_diff(x_phase, y_phase)
+        sync_index = np.sqrt((np.mean(np.cos(phase_diff)) ** 2) + (np.mean(np.sin(phase_diff)) ** 2))
+
+        return sync_index
+
+    def get_phase_diff(self, x_phase, y_phase):
+        '''
+        to calculate the absolute phase difference between two calcium
+            traces x and y phases from two different ROIs
+
+        parameters:
+        ---------------
+        x_phase: list. list of instantaneous phase (float) over time for ROI x
+        y_phase: list. list of instantaneous phase (float) over time for ROI y
+
+        returns:
+        ---------------
+        phase_diff: numpy array. the absolute phase difference between the two given phases
+        '''
+        x_phase = np.array(x_phase)
+        y_phase = np.array(y_phase)
+        phase_diff = np.mod(np.abs(x_phase - y_phase), (2 * np.pi))
+
+        return phase_diff # Numpy array
+
+    def get_phase(self, total_frames, spks):
+        '''
+        calculate the instantaneous phase between each frame that contains the peak 
+
+        parameters:
+        --------------
+        total_frames: int. total frames of the image
+        spks: list of int. frames at which the peaks occur
+
+        returns:
+        --------------
+        phase: list. a list of instantaneous phase (float) over time for each ROI
+        '''
+        spikes = spks.copy()
+        if len(spikes) == 0 or spikes[0] != 0:
+            spikes.insert(0, 0)
+        if spikes[-1] != (total_frames - 1):
+            spikes.append(total_frames - 1)
+
+        phase = []
+        for k in range(len(spikes) - 1):
+            t = spikes[k]
+
+            while t < spikes[k + 1]:
+                instant_phase = (2 * np.pi) * ((t - spikes[k]) / \
+                                               (spikes[k+1] - spikes[k])) + (2 * np.pi * k)
+                phase.append(instant_phase)
+                t += 1
+        phase.append(2 * np.pi * (len(spikes) - 1))
+
+        return phase # Python list
+
+    def save_files(self) -> None:
+        '''
+        to generate files for the analysis on the image
+
+        parameters:
+        ---------------
+        None.
+
+        returns:
+        ---------------
+        None.
+        '''
+        if self.roi_dict:
+            save_path = self.img_path[0:-4]
+
+            # create the folder
+            if not os.path.isdir(save_path):
+                os.mkdir(save_path)
+
+            # Raw signal
+            # columns = number of segmented ROIs
+            # rows (shape = num of frames)= averaged raw signals of all
+            #   pixels with the same label at each frame
+            raw_signal = np.zeros([len(self.roi_signal[list(self.roi_signal.keys())[0]]), len(self.roi_signal)])
+            for i, r in enumerate(self.roi_signal):
+                raw_signal[:, i] = self.roi_signal[r]
+
+            with open(save_path + '/raw_signal.csv', 'w') as signal_file:
+                writer = csv.writer(signal_file)
+                writer.writerow(self.roi_signal.keys())
+                for i in range(raw_signal.shape[0]):
+                    writer.writerow(raw_signal[i, :])
+
+            # signal corrected based on the background signal
+            # columns = number of segmented ROIs
+            # rows (shape= num of frames) = corrected signals based on 
+            #   the background signal at each frame for each ROI
+            dff_signal = np.zeros([len(self.roi_dff[list(self.roi_dff.keys())[0]]), len(self.roi_dff)])
+            for i, r in enumerate(self.roi_dff):
+                dff_signal[:, i] = self.roi_dff[r]
+
+            with open(save_path + '/dff.csv', 'w') as dff_file:
+                writer = csv.writer(dff_file)
+                writer.writerow(self.roi_dff.keys())
+                for i in range(dff_signal.shape[0]):
+                    writer.writerow(dff_signal[i, :])
+
+            # the median background fluorescence
+            with open(save_path + '/medians.json', 'w') as median_file:
+                json.dump(self.median, median_file, indent="")
+
+            # the background fluorescence signal
+            with open(save_path + '/background.json', 'w') as bg_file:
+                json.dump(self.bg, bg_file, indent="")
+
+            # the label-frame of peaks pairs
+            with open(save_path + '/spike_times.json', 'w') as spike_file:
+                json.dump(self.spike_times, spike_file, indent="")
+
+            # dict. label (int) - dict[amplitude, peak_indices, base_indices]
+            with open(save_path + '/roi_analysis.json', 'w') as analysis_file:
+                json.dump(self.roi_analysis, analysis_file, indent="")
+
+            # num_events for each labeled ROI
+            # first column: ROI number
+            # second column: num of events
+            # third column: frequency (num events/frames or exposure )
+            num_events = np.zeros((len(self.spike_times.keys()), 3))
+            active_roi = 0
+            for i, r in enumerate(self.spike_times):
+                num_e = len(self.spike_times[r])
+                if num_e > 0:
+                    active_roi += 1
+                num_events[i, 0] = i
+                num_events[i, 1] = num_e
+                if self.framerate:
+                    frame = self.framerate
+                    num_events[i, 2] = num_e / self.framerate
+                else:
+                    frame = len(self.img_stack)
+                    num_events[i, 2] = num_e / frame
+
+            with open(save_path + '/num_events.csv', 'w') as num_event_file:
+                writer = csv.writer(num_event_file)
+                fields = ['ROI', 'Num_events', 'Frequency']
+                writer.writerow(fields)
+                writer.writerows(num_events)
+                sum_text = [f'Active ROIs: {str(active_roi)}', f'Total frame/exposure: {str(frame)}']
+                writer.writerows([sum_text])
+
+            # label with the maximum correlation withs one of the spike templates
+            max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
+                                len(self.max_correlations)])
+            for i, r in enumerate(self.max_correlations):
+                max_cor[:, i] = self.max_correlations[r]
+
+            with open(save_path + '/max_correlations.csv', 'w') as cor_file:
+                writer = csv.writer(cor_file)
+                writer.writerow(self.max_correlations.keys())
+                for i in range(max_cor.shape[0]):
+                    writer.writerow(max_cor[i, :])
+
+            # label-index of the spike template with the maximum correlation pair
+            max_cor_temps = np.zeros([len(self.max_cor_templates[list(self.max_cor_templates.keys())[0]]),
+                                      len(self.max_cor_templates)])
+            for i, r in enumerate(self.max_cor_templates):
+                max_cor_temps[:, i] = self.max_cor_templates[r]
+
+            with open(save_path + '/max_cor_templates.csv', 'w') as cor_temp_file:
+                writer = csv.writer(cor_temp_file)
+                writer.writerow(self.max_cor_templates.keys())
+                for i in range(max_cor_temps.shape[0]):
+                    writer.writerow(max_cor_temps[i, :])
+
+            self.canvas_traces.print_png(save_path + '/traces.png')
+            self.canvas_just_traces.print_png(save_path + '/traces_no_detections.png')
+
+            label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
+            for i in range(1, np.max(self.labels) + 1):
+                i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
+                label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
+
+            # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
+            roi_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+            roi_layer.save(save_path + '/ROIs.tif')
+            # self.label_layer.print_png(save_path + '/ROIs.svg')
+
+            # the centers of each ROI
+            roi_centers = {}
+            for roi_number, roi_coords in self.roi_dict.items():
+                center = np.mean(roi_coords, axis=0)
+                roi_centers[roi_number] = (int(center[0]), int(center[1]))
+
+            with open(save_path + '/roi_centers.json', 'w') as roi_file:
+                json.dump(roi_centers, roi_file, indent="")
+
+            # prediction layer
+            self.prediction_layer.save(save_path + '/prediction.tif')
+
+            self.generate_summary(save_path)
+
+        else:
+            self.general_msg('No ROI', 'Cannot save data')
+
+    def generate_summary(self, save_path):
+        '''
+        to generate a summary of the graphs that include the average and std of 
+        amplitudes, time_to_rise, IEI, and mean connectivity
+
+        parameters:
+        ------------
+        save_path: str.  the prefix of the tif file name
+
+        returns:
+        ------------
+        None
+        '''
+        total_amplitude = []
+        total_time_to_rise = []
+        total_max_slope = []
+        total_IEI = []
+        total_num_events = []
+
+
+        for r in self.roi_analysis:
+            if len(self.roi_analysis[r]['amplitudes']) > 0:
+                total_amplitude.extend(self.roi_analysis[r]['amplitudes'])
+                total_time_to_rise.extend(self.roi_analysis[r]['time_to_rise'])
+                total_max_slope.extend(self.roi_analysis[r]['max_slope'])
+                # NOTE: add the number of spikes for each roi
+                if len(self.spike_times[r]) > 0:
+                    total_num_events.append(len(self.spike_times[r]))
+            if len(self.roi_analysis[r]['IEI']) > 0:
+                total_IEI.extend(self.roi_analysis[r]['IEI'])
+
+        if any(self.spike_times.values()):
+            avg_amplitude = np.mean(np.array(total_amplitude))
+            std_amplitude = np.std(np.array(total_amplitude))
+            avg_max_slope = np.mean(np.array(total_max_slope))
+            std_max_slope = np.std(np.array(total_max_slope))
+            # NOTE: get the average num of events
+            avg_num_events = np.mean(np.array(total_num_events))
+            std_num_events = np.std(np.array(total_num_events))
+            units = "seconds" if self.framerate else "frames"
+            avg_time_to_rise = np.mean(np.array(total_time_to_rise))
+            avg_time_to_rise = f'{avg_time_to_rise} {units}'
+            std_time_to_rise = np.std(np.array(total_time_to_rise))
+            if len(total_IEI) > 0:
+                avg_IEI = np.mean(np.array(total_IEI))
+                avg_IEI = f'{avg_IEI} {units}'
+                std_IEI = np.std(np.array(total_IEI))
+            else:
+                avg_IEI = 'N/A - Only one event per ROI'
+        else:
+            avg_amplitude = 'No calcium events detected'
+            avg_max_slope = 'No calcium events detected'
+            avg_time_to_rise = 'No calcium events detected'
+            avg_IEI = 'No calcium events detected'
+            avg_num_events = 'No calcium events detected'
+        percent_active = self.analyze_active(self.spike_times)
+
+        with open(save_path + '/summary.txt', 'w') as sum_file:
+            sum_file.write(f'File: {self.img_path}\n')
+            if self.framerate:
+                sum_file.write(f'Framerate: {self.framerate} frames/seconds\n')
+            else:
+                sum_file.write('No framerate detected\n')
+            sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
+            sum_file.write(f'Percent Active ROI: {percent_active}%\n')
+            sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
+            if len(total_amplitude) > 0:
+                sum_file.write(f'\tAmplitude Standard Deviation: {std_amplitude}\n')
+            sum_file.write(f'Average Max Slope: {avg_max_slope}\n')
+            if len(total_max_slope) > 0:
+                sum_file.write(f'\tMax Slope Standard Deviation: {std_max_slope}\n')
+            sum_file.write(f'Average Time to Rise: {avg_time_to_rise}\n')
+            if len(total_time_to_rise) > 0:
+                sum_file.write(f'\tTime to Rise Standard Deviation: {std_time_to_rise}\n')
+            sum_file.write(f'Average Interevent Interval (IEI): {avg_IEI}\n')
+            if len(total_IEI) > 0:
+                sum_file.write(f'\tIEI Standard Deviation: {std_IEI}\n')
+            # NOTE: num_events
+            sum_file.write(f'Average Number of events: {avg_num_events}\n')
+            if len(total_num_events) > 0:
+                sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
+                print("framerate ", self.framerate)
+                if self.framerate:
+                    sum_file.write(f'\tFrequency: {avg_num_events/self.framerate} per frame/second\n')
+                else:
+                    print(len(self.img_stack))
+                    if len(self.img_stack) > 3:
+                        frame = self.img_stack.shape[1]
+                    else:
+                        frame = self.img_stack.shape[0]
+                    sum_file.write(f'\tFrequency: {avg_num_events/frame} per frame\n')
+                max_event = np.argmax(total_num_events)
+                max_num_event = np.max(total_num_events)
+                sum_file.write(f'\t{max_event}th ROI has the most number of events: {max_num_event} peaks\n')
+
+            sum_file.write(f'Global Connectivity: {self.mean_connect}')
+
+    # Taken from napari-calcium plugin by Federico Gasparoli
+    def general_msg(self, message_1: str, message_2: str):
+        '''
+        Generate message for the viewer after analysis
+
+        parameters:
+        --------------
+        message_1: str. message to show
+        message_2: str. message to show
+
+        returns:
+        --------------
+        None
+        '''
+        msg = QMessageBox()
+        # msg.setStyleSheet("QLabel {min-width: 250px; min-height: 30px;}")
+        msg_info_1 = f'<p style="font-size:18pt; color: #4e9a06;">{message_1}</p>'
+        msg.setText(msg_info_1)
+        msg_info_2 = f'<p style="font-size:15pt; color: #000000;">{message_2}</p>'
+        msg.setInformativeText(msg_info_2)
+        msg.setStandardButtons(QMessageBox.Ok)
+        msg.exec()
+
+    def clear(self):
+        '''
+        to clear off the image and the analysis for the next image
+
+        parameters:
+        ---------------
+        None.
+
+        Returns:
+        ---------------
+        None
+        '''
+        i = len(self.viewer.layers) - 1
+        while i >= 0:
+            self.viewer.layers.pop(i)
+            i -= 1
+
+        self.img_stack = None
+        self.img_name = None
+        self.labels = None
+        self.label_layer = None
+        self.model_unet = None
+        self.prediction_layer = None
+        self.roi_dict = None
+        self.roi_signal = None
+        self.roi_dff = None
+        self.median = None
+        self.bg = None
+        self.spike_times = None
+        self.max_correlations = None
+        self.max_cor_templates = None
+        self.roi_analysis = None
+        self.framerate = None
+        self.mean_connect = None
+        self.img_path = None
+        self.colors = []
+
+        self.axes.cla()
+        self.canvas_traces.draw_idle()

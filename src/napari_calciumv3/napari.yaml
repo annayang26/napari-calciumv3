@@ -2,47 +2,10 @@ name: napari-calciumv3
 display_name: CalciumV3
 contributions:
   commands:
-    - id: napari-calciumv3.get_reader
-      python_name: napari_calciumv3._reader:napari_get_reader
-      title: Open data with CalciumV3
-    - id: napari-calciumv3.write_multiple
-      python_name: napari_calciumv3._writer:write_multiple
-      title: Save multi-layer data with CalciumV3
-    - id: napari-calciumv3.write_single_image
-      python_name: napari_calciumv3._writer:write_single_image
-      title: Save image data with CalciumV3
-    - id: napari-calciumv3.make_sample_data
-      python_name: napari_calciumv3._sample_data:make_sample_data
-      title: Load sample data from CalciumV3
-    - id: napari-calciumv3.make_qwidget
-      python_name: napari_calciumv3._widget:ExampleQWidget
-      title: Make example QWidget
-    - id: napari-calciumv3.make_magic_widget
-      python_name: napari_calciumv3._widget:example_magic_widget
-      title: Make example magic widget
-    - id: napari-calciumv3.make_func_widget
-      python_name: napari_calciumv3._widget:example_function_widget
-      title: Make example function widget
-  readers:
-    - command: napari-calciumv3.get_reader
-      accepts_directories: false
-      filename_patterns: ['*.npy']
-  writers:
-    - command: napari-calciumv3.write_multiple
-      layer_types: ['image*','labels*']
-      filename_extensions: []
-    - command: napari-calciumv3.write_single_image
-      layer_types: ['image']
-      filename_extensions: ['.npy']
-  sample_data:
-    - command: napari-calciumv3.make_sample_data
-      display_name: CalciumV3
-      key: unique_id.1
+    - id: napari-calciumv3.make_calcium_widget
+      python_name: napari_calciumv3._calcium:Calcium
+      title: Make CalciumV3 QWidget
   widgets:
-    - command: napari-calciumv3.make_qwidget
-      display_name: Example QWidget
-    - command: napari-calciumv3.make_magic_widget
-      display_name: Example Magic Widget
-    - command: napari-calciumv3.make_func_widget
-      autogenerate: true
-      display_name: Example Function Widget
+    - command: napari-calciumv3.make_calcium_widget
+      display_name: CalciumV3
+
