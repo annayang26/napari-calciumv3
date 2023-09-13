@@ -67,7 +67,9 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        data[var] = float(value[0].replace(r'/\D/g', ""))
+                        num = value[0].replace(r'/\D/g', "")
+                        print(num)
+                        # data[var] = float(value[0].replace(r'/\D/g', ""))
 
                         if var == "Frequency":
                             frequency_unit = str(value[1:])
