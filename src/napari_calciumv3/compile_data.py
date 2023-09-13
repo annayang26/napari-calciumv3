@@ -30,6 +30,7 @@ def compile_data(base_folder, file_name="summary.txt",
         ------------
         None
         '''
+        print("hello")
         if variable is None:
             variable = ["Total ROI", "Percent Active ROI", "Average Amplitude",
                         "Amplitude Standard Deviation", "Average Max Slope",
