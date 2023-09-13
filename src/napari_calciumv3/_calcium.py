@@ -1253,7 +1253,7 @@ class Calcium(QWidget):
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 print("framerate ", self.framerate)
                 if self.framerate:
-                    sum_file.write(f'\tFrequency (per fram/second): {avg_num_events/self.framerate}\n')
+                    sum_file.write(f'\tFrequency (per frame/second): {avg_num_events/self.framerate}\n')
                 else:
                     print(len(self.img_stack))
                     if len(self.img_stack) > 3:
@@ -1261,9 +1261,6 @@ class Calcium(QWidget):
                     else:
                         frame = self.img_stack.shape[0]
                     sum_file.write(f'\tFrequency (per frame): {avg_num_events/frame}\n')
-                max_event = np.argmax(total_num_events)
-                max_num_event = np.max(total_num_events)
-                sum_file.write(f'\t{max_event}th ROI has the most number of events: {max_num_event} peaks\n')
 
             sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
