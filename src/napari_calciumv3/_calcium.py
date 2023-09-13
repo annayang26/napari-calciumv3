@@ -1243,7 +1243,7 @@ class Calcium(QWidget):
             else:
                 sum_file.write('No framerate detected\n')
             sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
-            sum_file.write(f'Percent Active ROI: {percent_active}%\n')
+            sum_file.write(f'Percent Active ROI: {percent_active} %\n')
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
             if len(total_amplitude) > 0:
                 sum_file.write(f'\tAmplitude Standard Deviation: {std_amplitude}\n')

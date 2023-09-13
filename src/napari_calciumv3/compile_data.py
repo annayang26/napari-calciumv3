@@ -67,10 +67,12 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        num = ""
-                        for i in value[0]:
-                            if i.isdigit():
-                                num += i
+                        num = re.finall(r'\d+(\.\d+)')
+
+                        # num = ""
+                        # for i in value[0]:
+                        #     if i.isdigit():
+                        #         num += i
                         print(num, "type: ", type(num))
                         data[var] = float(num)
 
@@ -107,7 +109,7 @@ def compile_data(base_folder, file_name="summary.txt",
             compile_name = "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
-                writer = csv.DictWriter(c_file, fieldnames=field_names)
+                writer = csv.DictWriter(c_file, fieldnames=field_names, extrasaction='ignore')
                 writer.writeheader()
                 writer.writerows(files)
         else:
