@@ -72,7 +72,7 @@ def compile_data(base_folder, file_name="summary.txt",
                             data[var] = float(value[0])
 
                         elif value[0][-1] == "%":
-                            data[var] = float[value[0][:-1]]
+                            data[var] = float(value[0][:-1])
 
                         if var == "Frequency":
                             frequency_unit = str(value[1:])
