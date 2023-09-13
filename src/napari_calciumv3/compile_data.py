@@ -48,7 +48,7 @@ def compile_data(base_folder, file_name="summary.txt",
                 dir_list.append(dir_path)
 
         files = []
-        frequency_unit =""
+        # frequency_unit =""
 
         # traverse through all the matching files
         for dir_name in dir_list:
@@ -67,6 +67,7 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip().split(" ")
 
                         print("value: ", values[0])
+                        data[var] = float(values[0])
 
                         # for item in items:
                         #     print("item in the line: ", item)
@@ -83,21 +84,21 @@ def compile_data(base_folder, file_name="summary.txt",
             # write into a new csv file
             field_names = ["name"]
 
-            for i in range(len(variable)):
-                if variable[i] == "Percent Active ROI":
-                    variable[i] += " (%)"
-                elif variable[i] == "Average Time to Rise" or\
-                    variable[i] == "Average Interevent Interval (IEI)":
-                    variable[i] += " (seconds)"
-                elif variable[i] == "Frequency":
-                    variable[i] += frequency_unit
+            # for i in range(len(variable)):
+            #     if variable[i] == "Percent Active ROI":
+            #         variable[i] += " (%)"
+            #     elif variable[i] == "Average Time to Rise" or\
+            #         variable[i] == "Average Interevent Interval (IEI)":
+            #         variable[i] += " (seconds)"
+            #     elif variable[i] == "Frequency":
+            #         variable[i] += frequency_unit
 
             field_names.extend(variable)
 
             compile_name = os.path.basename(base_folder) + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
-                writer = csv.DictWriter(c_file, fieldnames=field_names, extrasaction='ignore')
+                writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)
         else:
