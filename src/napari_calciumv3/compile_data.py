@@ -30,7 +30,6 @@ def compile_data(base_folder, file_name="summary.txt",
         ------------
         None
         '''
-        print("hello")
         if variable is None:
             variable = ["Total ROI", "Percent Active ROI", "Average Amplitude",
                         "Amplitude Standard Deviation", "Average Max Slope",
@@ -66,21 +65,12 @@ def compile_data(base_folder, file_name="summary.txt",
                         items = line.split(":")
                         values = items[1].strip().split(" ")
 
-                        print("value list: ", values)
-                        print("value[0]: ", values[0].strip("%"))
-
                         num = values[0].strip("%")
 
                         if values[0] == "N/A":
                             num = 0
 
                         data[var] = float(num)
-
-                        # for item in items:
-                        #     print("item in the line: ", item)
-                        #     if any(char.isdigit() for char in item):
-                        #         print(float(item))
-                        #         data[var] = float(item)
 
             if len(data) > 1:
                 files.append(data)
@@ -90,18 +80,7 @@ def compile_data(base_folder, file_name="summary.txt",
         if len(files) > 0:
             # write into a new csv file
             field_names = ["name"]
-
-            # for i in range(len(variable)):
-            #     if variable[i] == "Percent Active ROI":
-            #         variable[i] += " (%)"
-            #     elif variable[i] == "Average Time to Rise" or\
-            #         variable[i] == "Average Interevent Interval (IEI)":
-            #         variable[i] += " (seconds)"
-            #     elif variable[i] == "Frequency":
-            #         variable[i] += frequency_unit
-
             field_names.extend(variable)
-
             compile_name = os.path.basename(base_folder) + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
