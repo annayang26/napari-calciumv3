@@ -186,7 +186,6 @@ class Calcium(QWidget):
 
                         if var not in data:
                             data[var] = []
-                            print(var)
 
                         values = items[1].strip().split(" ")
                         num = values[0].strip("%")
@@ -194,12 +193,6 @@ class Calcium(QWidget):
                         if values[0] == "N/A":
                             num = 0
                         data[var] = float(num)
-
-                        # for item in items:
-                        #     print("item in the line: ", item)
-                        #     if any(char.isdigit() for char in item):
-                        #         print(float(item))
-                        #         data[var] = float(item)
 
             if len(data) > 1:
                 files.append(data)
