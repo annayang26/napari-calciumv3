@@ -69,10 +69,12 @@ def compile_data(base_folder, file_name="summary.txt",
                         print("value list: ", values)
                         print("value[0]: ", values[0].strip("%"))
 
-                        if values[0] == "N/A":
-                            values[0] = 0
+                        num = values[0].strip("%")
 
-                        data[var] = float(values[0])
+                        if values[0] == "N/A":
+                            num = 0
+
+                        data[var] = float(num)
 
                         # for item in items:
                         #     print("item in the line: ", item)
