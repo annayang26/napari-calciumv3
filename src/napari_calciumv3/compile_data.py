@@ -67,7 +67,7 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        num = re.findall(r'\d+(\.\d+)')
+                        num = re.findall(r'\d+(\.\d+)', value[0])
 
                         # num = ""
                         # for i in value[0]:
