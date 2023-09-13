@@ -30,10 +30,13 @@ def compile_data(base_folder, file_name="summary.txt",
         None
         '''
         if variable is None:
-            variable = ["Total ROI", "Percent Active ROI", "Average Amplitude", "Amplitude Standard Deviation",
-                        "Average Max Slope", "Max Slope Standard Deviation", "Average Time to Rise",
-                        "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
-                        "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
+            variable = ["Total ROI", "Percent Active ROI", "Average Amplitude",
+                        "Amplitude Standard Deviation", "Average Max Slope",
+                        "Max Slope Standard Deviation", "Average Time to Rise",
+                        "Time to Rise Standard Deviation",
+                        "Average Interevent Interval (IEI)",
+                        "IEI Standard Deviation", "Average Number of events",
+                        "Number of events Standard Deviation",
                         "Frequency", "Global Connectivity"]
 
         dir_list = []
@@ -62,7 +65,7 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        data[var] = float(value[0])
+                        data[var] = float(num for num in value[0] if num.isdigit())
 
                         if var == "Frequency":
                             frequency_unit = str(value[1:])
