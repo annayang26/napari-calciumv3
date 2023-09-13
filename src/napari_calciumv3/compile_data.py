@@ -64,18 +64,9 @@ def compile_data(base_folder, file_name="summary.txt",
                             data[var] = []
 
                         items = line.split(":")
-                        values = items[1].strip()
-                        value = values.split(" ")
-                        print("value: ", value[0])
+                        values = items[1].strip().split(" ")
 
-                        if value[0].isdigit():
-                            data[var] = float(value[0])
-
-                        elif value[0][-1] == "%":
-                            data[var] = float(value[0][:-1])
-
-                        if var == "Frequency":
-                            frequency_unit = str(value[1:])
+                        print("value: ", values[0])
 
                         # for item in items:
                         #     print("item in the line: ", item)
@@ -103,12 +94,11 @@ def compile_data(base_folder, file_name="summary.txt",
 
             field_names.extend(variable)
 
-            print(os.path.basename(base_folder))
-            compile_name = "_compile_file.csv"
+            compile_name = os.path.basename(base_folder) + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
-                writer = csv.writer(c_file)
-                writer.writerows(variable)
+                writer = csv.DictWriter(c_file, fieldnames=field_names, extrasaction='ignore')
+                writer.writeheader()
                 writer.writerows(files)
         else:
             print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501

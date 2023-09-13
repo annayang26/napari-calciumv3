@@ -129,7 +129,7 @@ class Calcium(QWidget):
 
         self._compile_data(folder_names[0])
 
-    def _compile_data(self, base_folder, compile_name,
+    def _compile_data(self, base_folder,
                       file_name="summary.txt", variable=None):
         '''
         to compile all the data from different folders into one csv file
