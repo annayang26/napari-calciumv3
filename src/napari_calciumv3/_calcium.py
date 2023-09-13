@@ -170,7 +170,6 @@ class Calcium(QWidget):
                 dir_list.append(dir_path)
 
         files = []
-        # frequency_unit =""
 
         # traverse through all the matching files
         for dir_name in dir_list:
@@ -180,15 +179,21 @@ class Calcium(QWidget):
 
             # find the variable in the file
             for line in result:
-                for var in variable:
-                    if var.lower().strip() in line.lower():
+                for old_var in variable:
+                    if old_var.lower().strip() in line.lower():
                         items = line.split(":")
                         var = items[0].strip()
+
                         if var not in data:
                             data[var] = []
+                            print(var)
 
                         values = items[1].strip().split(" ")
-                        data[var] = float(values[0])
+                        num = values[0].strip("%")
+
+                        if values[0] == "N/A":
+                            num = 0
+                        data[var] = float(num)
 
                         # for item in items:
                         #     print("item in the line: ", item)
