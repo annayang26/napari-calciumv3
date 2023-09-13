@@ -68,15 +68,11 @@ def compile_data(base_folder, file_name="summary.txt",
                         value = values.split(" ")
                         print("value: ", value[0])
 
-                        num = re.findall(r'\d+(\.\d+)?', value[0])
-                        print(num)
+                        if value[0].isdigit():
+                            data[var] = float(value[0])
 
-                        # num = ""
-                        # for i in value[0]:
-                        #     if i.isdigit():
-                        #         num += i
-                        # print(num[0], "type: ", type(num[0]))
-                        data[var] = float(num)
+                        elif value[0][-1] == "%":
+                            data[var] = float[value[0][:-1]]
 
                         if var == "Frequency":
                             frequency_unit = str(value[1:])
