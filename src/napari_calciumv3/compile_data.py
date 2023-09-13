@@ -103,8 +103,8 @@ def compile_data(base_folder, file_name="summary.txt",
 
             field_names.extend(variable)
 
-            print(os.getcwd())
-            compile_name = os.getcwd() + "_compile_file.csv"
+            print(os.path.dirname(base_folder))
+            compile_name = "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
