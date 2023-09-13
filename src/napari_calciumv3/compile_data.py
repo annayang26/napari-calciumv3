@@ -67,9 +67,12 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        num = value[0].replace(r'/\d/g', "")
-                        print(num)
-                        # data[var] = float(value[0].replace(r'/\D/g', ""))
+                        num = ""
+                        for i in value[0]:
+                            if i.isdigit():
+                                num += i
+                        print(num, "type: ", type(num))
+                        data[var] = float(num)
 
                         if var == "Frequency":
                             frequency_unit = str(value[1:])
@@ -100,7 +103,8 @@ def compile_data(base_folder, file_name="summary.txt",
 
             field_names.extend(variable)
 
-            compile_name = base_folder.split("/")[-1][0:-14] + "_compile_file.csv"
+            print(os.getcwd())
+            compile_name = os.getcwd() + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
