@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import tifffile as tff
-import zarr
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from qtpy.QtWidgets import (
@@ -130,8 +129,8 @@ class Calcium(QWidget):
 
         self._compile_data(folder_names[0])
 
-    def _compile_data(self, base_folder, file_name="summary.txt",
-                    variable=None, compile_name="compile_data.csv"):
+    def _compile_data(self, base_folder, compile_name,
+                      file_name="summary.txt", variable=None):
         '''
         to compile all the data from different folders into one csv file
         options to include the line name and the variable name(s) to look for; 
@@ -171,6 +170,7 @@ class Calcium(QWidget):
                 dir_list.append(dir_path)
 
         files = []
+        frequency_unit =""
 
         # traverse through all the matching files
         for dir_name in dir_list:
@@ -184,10 +184,21 @@ class Calcium(QWidget):
                     if var.lower().strip() in line.lower():
                         if var not in data:
                             data[var] = []
+
                         items = line.split(":")
-                        for item in items:
-                            if any(char.isdigit() for char in item):
-                                data[var] = item
+                        values = items[1].strip()
+                        value = values.split(" ")
+
+                        data[var] = float(value[0])
+
+                        if var == "Frequency":
+                            frequency_unit = str(value[1:])
+
+                        # for item in items:
+                        #     print("item in the line: ", item)
+                        #     if any(char.isdigit() for char in item):
+                        #         print(float(item))
+                        #         data[var] = float(item)
 
             if len(data) > 1:
                 files.append(data)
@@ -197,9 +208,20 @@ class Calcium(QWidget):
         if len(files) > 0:
             # write into a new csv file
             field_names = ["name"]
+
+            for i in range(len(variable)):
+                if variable[i] == "Percent Active ROI":
+                    variable[i] += " (%)"
+                elif variable[i] == "Average Time to Rise" or variable[i] == "Average Interevent Interval (IEI)":
+                    variable[i] += " (seconds)"
+                elif variable[i] == "Frequency":
+                    variable[i] += frequency_unit
+
             field_names.extend(variable)
 
-            with open(base_folder + "/" + compile_name, 'w') as c_file:
+            compile_name = base_folder[0:-14] + "_compile_file.csv"
+
+            with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)
