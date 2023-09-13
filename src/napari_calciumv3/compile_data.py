@@ -100,7 +100,7 @@ def compile_data(base_folder, file_name="summary.txt",
 
             field_names.extend(variable)
 
-            compile_name = base_folder[0:-14] + "_compile_file.csv"
+            compile_name = base_folder.split("/")[-1][0:-14] + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
