@@ -208,17 +208,7 @@ class Calcium(QWidget):
 
         if len(files) > 0:
             # write into a new csv file
-            field_names = ["name"]
-
-            # for i in range(len(variable)):
-            #     if variable[i] == "Percent Active ROI":
-            #         variable[i] += " (%)"
-            #     elif variable[i] == "Average Time to Rise" or variable[i] == "Average Interevent Interval (IEI)":
-            #         variable[i] += " (seconds)"
-            #     elif variable[i] == "Frequency":
-            #         variable[i] += frequency_unit
-
-            field_names.extend(list(data.keys()))
+            field_names = list(data.keys())
 
             compile_name = os.path.basename(base_folder) + "_compile_file.csv"
 
