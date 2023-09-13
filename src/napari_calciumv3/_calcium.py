@@ -170,7 +170,7 @@ class Calcium(QWidget):
                 dir_list.append(dir_path)
 
         files = []
-        frequency_unit =""
+        # frequency_unit =""
 
         # traverse through all the matching files
         for dir_name in dir_list:
@@ -182,17 +182,13 @@ class Calcium(QWidget):
             for line in result:
                 for var in variable:
                     if var.lower().strip() in line.lower():
+                        items = line.split(":")
+                        var = items[0].strip()
                         if var not in data:
                             data[var] = []
 
-                        items = line.split(":")
-                        values = items[1].strip()
-                        value = values.split(" ")
-
-                        data[var] = float(value[0])
-
-                        if var == "Frequency":
-                            frequency_unit = str(value[1:])
+                        values = items[1].strip().split(" ")
+                        data[var] = float(values[0])
 
                         # for item in items:
                         #     print("item in the line: ", item)
@@ -209,17 +205,17 @@ class Calcium(QWidget):
             # write into a new csv file
             field_names = ["name"]
 
-            for i in range(len(variable)):
-                if variable[i] == "Percent Active ROI":
-                    variable[i] += " (%)"
-                elif variable[i] == "Average Time to Rise" or variable[i] == "Average Interevent Interval (IEI)":
-                    variable[i] += " (seconds)"
-                elif variable[i] == "Frequency":
-                    variable[i] += frequency_unit
+            # for i in range(len(variable)):
+            #     if variable[i] == "Percent Active ROI":
+            #         variable[i] += " (%)"
+            #     elif variable[i] == "Average Time to Rise" or variable[i] == "Average Interevent Interval (IEI)":
+            #         variable[i] += " (seconds)"
+            #     elif variable[i] == "Frequency":
+            #         variable[i] += frequency_unit
 
-            field_names.extend(variable)
+            field_names.extend(list(data.keys()))
 
-            compile_name = base_folder[0:-14] + "_compile_file.csv"
+            compile_name = os.path.basename(base_folder) + "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
@@ -1218,13 +1214,12 @@ class Calcium(QWidget):
             # NOTE: get the average num of events
             avg_num_events = np.mean(np.array(total_num_events))
             std_num_events = np.std(np.array(total_num_events))
-            units = "seconds" if self.framerate else "frames"
             avg_time_to_rise = np.mean(np.array(total_time_to_rise))
-            avg_time_to_rise = f'{avg_time_to_rise} {units}'
+            # avg_time_to_rise = f'{avg_time_to_rise} {units}'
             std_time_to_rise = np.std(np.array(total_time_to_rise))
             if len(total_IEI) > 0:
                 avg_IEI = np.mean(np.array(total_IEI))
-                avg_IEI = f'{avg_IEI} {units}'
+                # avg_IEI = f'{avg_IEI} {units}'
                 std_IEI = np.std(np.array(total_IEI))
             else:
                 avg_IEI = 'N/A - Only one event per ROI'
@@ -1237,23 +1232,24 @@ class Calcium(QWidget):
         percent_active = self.analyze_active(self.spike_times)
 
         with open(save_path + '/summary.txt', 'w') as sum_file:
+            units = "seconds" if self.framerate else "frames"
             sum_file.write(f'File: {self.img_path}\n')
             if self.framerate:
                 sum_file.write(f'Framerate: {self.framerate} frames/seconds\n')
             else:
                 sum_file.write('No framerate detected\n')
             sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
-            sum_file.write(f'Percent Active ROI: {percent_active} %\n')
+            sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
             if len(total_amplitude) > 0:
                 sum_file.write(f'\tAmplitude Standard Deviation: {std_amplitude}\n')
             sum_file.write(f'Average Max Slope: {avg_max_slope}\n')
             if len(total_max_slope) > 0:
                 sum_file.write(f'\tMax Slope Standard Deviation: {std_max_slope}\n')
-            sum_file.write(f'Average Time to Rise: {avg_time_to_rise}\n')
+            sum_file.write(f'Average Time to Rise ({units}): {avg_time_to_rise}\n')
             if len(total_time_to_rise) > 0:
                 sum_file.write(f'\tTime to Rise Standard Deviation: {std_time_to_rise}\n')
-            sum_file.write(f'Average Interevent Interval (IEI): {avg_IEI}\n')
+            sum_file.write(f'Average Interevent Interval (IEI) ({units}): {avg_IEI}\n')
             if len(total_IEI) > 0:
                 sum_file.write(f'\tIEI Standard Deviation: {std_IEI}\n')
             # NOTE: num_events
@@ -1262,14 +1258,14 @@ class Calcium(QWidget):
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 print("framerate ", self.framerate)
                 if self.framerate:
-                    sum_file.write(f'\tFrequency: {avg_num_events/self.framerate} per frame/second\n')
+                    sum_file.write(f'\tFrequency (per fram/second): {avg_num_events/self.framerate}\n')
                 else:
                     print(len(self.img_stack))
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
                     else:
                         frame = self.img_stack.shape[0]
-                    sum_file.write(f'\tFrequency: {avg_num_events/frame} per frame\n')
+                    sum_file.write(f'\tFrequency (per frame): {avg_num_events/frame}\n')
                 max_event = np.argmax(total_num_events)
                 max_num_event = np.max(total_num_events)
                 sum_file.write(f'\t{max_event}th ROI has the most number of events: {max_num_event} peaks\n')
