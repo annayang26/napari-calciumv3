@@ -107,7 +107,7 @@ def compile_data(base_folder, file_name="summary.txt",
             compile_name = "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
-                writer = csv.DictWriter(c_file)
+                writer = csv.writer(c_file)
                 writer.writerows(variable)
                 writer.writerows(files)
         else:
