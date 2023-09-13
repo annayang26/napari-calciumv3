@@ -67,7 +67,7 @@ def compile_data(base_folder, file_name="summary.txt",
                         values = items[1].strip()
                         value = values.split(" ")
 
-                        num = value[0].replace(r'/\D/g', "")
+                        num = value[0].replace(r'/\d/g', "")
                         print(num)
                         # data[var] = float(value[0].replace(r'/\D/g', ""))
 
