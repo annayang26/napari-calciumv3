@@ -103,12 +103,12 @@ def compile_data(base_folder, file_name="summary.txt",
 
             field_names.extend(variable)
 
-            print(os.path.dirname(base_folder))
+            print(os.path.basename(base_folder))
             compile_name = "_compile_file.csv"
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
-                writer = csv.DictWriter(c_file, fieldnames=field_names, extrasaction='ignore')
-                writer.writeheader()
+                writer = csv.DictWriter(c_file)
+                writer.writerows(variable)
                 writer.writerows(files)
         else:
             print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
