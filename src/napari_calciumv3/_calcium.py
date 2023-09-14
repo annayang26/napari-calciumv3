@@ -1248,8 +1248,8 @@ class Calcium(QWidget):
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 if self.framerate:
-                    frequency = total_num_events/(self.framerate*self.img_stack.shape[0])
-                    sum_file.write(f'\tFrequency (num_events/ms): {frequency}\n')
+                    frequency = avg_num_events/(self.framerate*self.img_stack.shape[0])
+                    sum_file.write(f'\tAverage Frequency (num_events/ms): {frequency}\n')
                 else:
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
