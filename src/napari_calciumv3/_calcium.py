@@ -1096,17 +1096,20 @@ class Calcium(QWidget):
                 num_events[i, 1] = num_e
                 if self.framerate:
                     frame = self.framerate
-                    num_events[i, 2] = num_e / self.framerate
+                    num_events[i, 2] = num_e / (self.framerate * self.img_stack.shape[0])
                 else:
                     frame = len(self.img_stack)
                     num_events[i, 2] = num_e / frame
 
             with open(save_path + '/num_events.csv', 'w') as num_event_file:
                 writer = csv.writer(num_event_file)
-                fields = ['ROI', 'Num_events', 'Frequency']
+                if self.framerate:
+                    fields = ['ROI', 'Num_events', 'Frequency (num of events/ms)']
+                else:
+                    fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
                 writer.writerow(fields)
                 writer.writerows(num_events)
-                sum_text = [f'Active ROIs: {str(active_roi)}', f'Total frame/exposure: {str(frame)}']
+                sum_text = [f'Active ROIs: {str(active_roi)}', ' ', f'Total frame/exposure: {str(frame)}']
                 writer.writerows([sum_text])
 
             # label with the maximum correlation withs one of the spike templates
@@ -1244,16 +1247,15 @@ class Calcium(QWidget):
             sum_file.write(f'Average Number of events: {avg_num_events}\n')
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
-                print("framerate ", self.framerate)
                 if self.framerate:
-                    sum_file.write(f'\tFrequency (per frame/second): {avg_num_events/self.framerate}\n')
+                    frequency = total_num_events/(self.framerate*self.img_stack.shape[0])
+                    sum_file.write(f'\tFrequency (num_events/ms): {frequency}\n')
                 else:
-                    print(len(self.img_stack))
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
                     else:
                         frame = self.img_stack.shape[0]
-                    sum_file.write(f'\tFrequency (per frame): {avg_num_events/frame}\n')
+                    sum_file.write(f'\tFrequency (num_events/frame): {avg_num_events/frame}\n')
 
             sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
