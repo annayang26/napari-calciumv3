@@ -1111,7 +1111,7 @@ class Calcium(QWidget):
                 writer.writerows(num_events)
                 frame_info = [framerate if self.framerate else frame]
                 sum_text = [f'Active ROIs: {str(active_roi)}']
-                sum_text.extend(frame_info)
+                sum_text.extend([frame_info])
                 writer.writerows(sum_text)
 
             # label with the maximum correlation withs one of the spike templates
