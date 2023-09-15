@@ -482,6 +482,7 @@ class Calcium(QWidget):
     #TODO: finish the documentation here
     def plot_values(self, dff, labels, layer, spike_times) -> None:
         '''
+        generate plots for dff, labeled_ROI, layers, and spike times
 
         parameters:
         --------------
@@ -528,9 +529,9 @@ class Calcium(QWidget):
         else:
             self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
-    # TODO: finish the documentation
-    def find_peaks(self, roi_dff, template_file, spk_threshold, reset_threshold):
+    def find_peaks(self, roi_dff: dict, template_file: str, spk_threshold: float, reset_threshold: float):
         '''
+        find the spikes from the fluorescence signals
 
         parameters:
         --------------
@@ -538,7 +539,7 @@ class Calcium(QWidget):
         template_file: str. the template file for spikes
         spk_threshold: float. threshold for determining if the spike \
             is correlated with the template
-        reset_threshold:
+        reset_threshold: float. threshold for reseting the peak finding
 
         returns:
         --------------
@@ -613,7 +614,7 @@ class Calcium(QWidget):
 
         return spike_times
 
-    def analyze_ROI(self, roi_dff, spk_times):
+    def analyze_ROI(self, roi_dff: dict, spk_times: dict):
         '''
         to analyze the labeled ROI
 
@@ -658,7 +659,7 @@ class Calcium(QWidget):
         # print(roi_analysis)
         return roi_analysis, framerate
 
-    def get_amplitude(self, roi_dff, spk_times, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
+    def get_amplitude(self, roi_dff: dict, spk_times: dict, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
         '''
         find the locations (frames) of the peaks, with the peak indices and base indices
 
@@ -785,7 +786,7 @@ class Calcium(QWidget):
         #     print('base:', amplitude_info[r]['base_indices'])
         return amplitude_info
 
-    def get_time_to_rise(self, amplitude_info, framerate):
+    def get_time_to_rise(self, amplitude_info: dict, framerate: float):
         '''
         get a list of time to rise for each peak throughout all the frames
 
@@ -816,7 +817,7 @@ class Calcium(QWidget):
         # print('time to rise:', time_to_rise)
         return time_to_rise
 
-    def get_max_slope(self, roi_dff, amplitude_info):
+    def get_max_slope(self, roi_dff: dict, amplitude_info: dict):
         '''
         calculate the maximum slope of each peak of each label
 
@@ -843,7 +844,7 @@ class Calcium(QWidget):
 
         return max_slope
 
-    def analyze_IEI(self, spk_times, framerate):
+    def analyze_IEI(self, spk_times: dict, framerate: float):
         '''
         calculate the inter-event interval (IEI)
 
@@ -869,7 +870,7 @@ class Calcium(QWidget):
                     IEI[r].append(IEI_frames)
         return IEI
 
-    def analyze_active(self, spk_times):
+    def analyze_active(self, spk_times: dict):
         '''
         calculate the percentage of active cell bodies
 
@@ -889,7 +890,7 @@ class Calcium(QWidget):
         active = (active / len(spk_times)) * 100
         return active
 
-    def get_mean_connect(self, roi_dff, spk_times):
+    def get_mean_connect(self, roi_dff: dict, spk_times: dict):
         '''
         calculate functional connectivity described in Afshar Saber et al. 2018.
 
@@ -914,7 +915,7 @@ class Calcium(QWidget):
 
         return mean_connect
 
-    def get_connect_matrix(self, roi_dff, spk_times):
+    def get_connect_matrix(self, roi_dff: dict, spk_times: dict):
         '''
         to calculate a matrix of synchronizatiion index described in Patel et al. 2015
 
@@ -945,7 +946,7 @@ class Calcium(QWidget):
 
         return connect_matrix
 
-    def get_sync_index(self, x_phase, y_phase):
+    def get_sync_index(self, x_phase: list, y_phase: list):
         '''
         to calculate the pair-wise synchronization index of the two ROIs
 
@@ -964,7 +965,7 @@ class Calcium(QWidget):
 
         return sync_index
 
-    def get_phase_diff(self, x_phase, y_phase):
+    def get_phase_diff(self, x_phase: list, y_phase: list):
         '''
         to calculate the absolute phase difference between two calcium
             traces x and y phases from two different ROIs
@@ -984,7 +985,7 @@ class Calcium(QWidget):
 
         return phase_diff # Numpy array
 
-    def get_phase(self, total_frames, spks):
+    def get_phase(self, total_frames: int, spks: list):
         '''
         calculate the instantaneous phase between each frame that contains the peak 
 
@@ -1164,7 +1165,7 @@ class Calcium(QWidget):
         else:
             self.general_msg('No ROI', 'Cannot save data')
 
-    def generate_summary(self, save_path):
+    def generate_summary(self, save_path:str) -> None:
         '''
         to generate a summary of the graphs that include the average and std of 
         amplitudes, time_to_rise, IEI, and mean connectivity
@@ -1172,10 +1173,6 @@ class Calcium(QWidget):
         parameters:
         ------------
         save_path: str.  the prefix of the tif file name
-
-        returns:
-        ------------
-        None
         '''
         total_amplitude = []
         total_time_to_rise = []
@@ -1258,7 +1255,7 @@ class Calcium(QWidget):
             sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
     # Taken from napari-calcium plugin by Federico Gasparoli
-    def general_msg(self, message_1: str, message_2: str):
+    def general_msg(self, message_1: str, message_2: str) -> None:
         '''
         Generate message for the viewer after analysis
 
