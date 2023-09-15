@@ -1046,7 +1046,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.roi_signal):
                 raw_signal[:, i] = self.roi_signal[r]
 
-            with open(save_path + '/raw_signal.csv', 'w') as signal_file:
+            with open(save_path + '/raw_signal.csv', 'w', newline='') as signal_file:
                 writer = csv.writer(signal_file)
                 writer.writerow(self.roi_signal.keys())
                 for i in range(raw_signal.shape[0]):
@@ -1060,7 +1060,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.roi_dff):
                 dff_signal[:, i] = self.roi_dff[r]
 
-            with open(save_path + '/dff.csv', 'w') as dff_file:
+            with open(save_path + '/dff.csv', 'w', newline='') as dff_file:
                 writer = csv.writer(dff_file)
                 writer.writerow(self.roi_dff.keys())
                 for i in range(dff_signal.shape[0]):
@@ -1101,8 +1101,8 @@ class Calcium(QWidget):
                     frame = len(self.img_stack)
                     num_events[i, 2] = num_e / frame
 
-            with open(save_path + '/num_events.csv', 'w') as num_event_file:
-                writer = csv.writer(num_event_file)
+            with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
+                writer = csv.writer(num_event_file, dialect="excel")
                 if self.framerate:
                     fields = ['ROI', 'Num_events', 'Frequency (num of events/ms)']
                 else:
@@ -1112,6 +1112,7 @@ class Calcium(QWidget):
                 frame_info = [framerate if self.framerate else frame]
                 sum_text = [f'Active ROIs: {str(active_roi)}']
                 sum_text.extend([frame_info])
+                print(sum_text)
                 writer.writerows(sum_text)
 
             # label with the maximum correlation withs one of the spike templates
@@ -1120,7 +1121,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.max_correlations):
                 max_cor[:, i] = self.max_correlations[r]
 
-            with open(save_path + '/max_correlations.csv', 'w') as cor_file:
+            with open(save_path + '/max_correlations.csv', 'w', newline='') as cor_file:
                 writer = csv.writer(cor_file)
                 writer.writerow(self.max_correlations.keys())
                 for i in range(max_cor.shape[0]):
@@ -1132,7 +1133,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.max_cor_templates):
                 max_cor_temps[:, i] = self.max_cor_templates[r]
 
-            with open(save_path + '/max_cor_templates.csv', 'w') as cor_temp_file:
+            with open(save_path + '/max_cor_templates.csv', 'w', newline='') as cor_temp_file:
                 writer = csv.writer(cor_temp_file)
                 writer.writerow(self.max_cor_templates.keys())
                 for i in range(max_cor_temps.shape[0]):
