@@ -2,6 +2,7 @@ import csv
 import importlib.resources
 import json
 import os
+import time
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -103,26 +104,24 @@ class Calcium(QWidget):
 
             if file_name.endswith(".ome.tif"):
                 file_path = os.path.join(folder_names[0], file_name)
-                print("file_path: ", file_path)
 
                 img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                # print("img array shape: ", img.shape)
+
+                time.sleep(5)
                 self.viewer.add_image(img,
                                       name=file_name)
 
                 self.img_stack = self.viewer.layers[0].data
                 self.img_path = file_path
                 self.img_name = file_name
-                print("Opening the OME.TIF file...")
+
                 print("self img stack: ", self.img_stack.shape)
                 print("self img path ", self.img_path)
                 print("self img name: ", self.img_name)
 
-                print("Analyzing...")
                 self._on_click()
-                print("finished analysis")
                 self.save_files()
-                print("Saved the analysis folder")
+                time.sleep(10)
                 self.clear()
 
         print(f'{folder_names[0]} is done batch processing')
@@ -229,14 +228,13 @@ class Calcium(QWidget):
             self.img_path = self.viewer.layers[0].source.path
 
         #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
-        print("img_size[0] is ", self.img_stack.shape[0])
-        print("img_size[1] is ", self.img_stack.shape[1])
-        print("img_size[-1] is ", self.img_stack.shape[-1])
+        # print("img_size[0] is ", self.img_stack.shape[0])
+        # print("img_size[1] is ", self.img_stack.shape[1])
+        # print("img_size[-1] is ", self.img_stack.shape[-1])
         img_size = self.img_stack.shape[-1]
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-
 
         import tensorflow as tf
         import tensorflow.keras.backend as K
