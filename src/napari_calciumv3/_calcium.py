@@ -1095,8 +1095,8 @@ class Calcium(QWidget):
                 num_events[i, 0] = i
                 num_events[i, 1] = num_e
                 if self.framerate:
-                    frame = self.framerate
-                    num_events[i, 2] = num_e / (self.framerate * self.img_stack.shape[0])
+                    framerate = self.framerate
+                    num_events[i, 2] = num_e / (self.img_stack.shape[0]/self.framerate)
                 else:
                     frame = len(self.img_stack)
                     num_events[i, 2] = num_e / frame
@@ -1109,8 +1109,10 @@ class Calcium(QWidget):
                     fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
                 writer.writerow(fields)
                 writer.writerows(num_events)
-                sum_text = [f'Active ROIs: {str(active_roi)}', ' ', f'Total frame/exposure: {str(frame)}']
-                writer.writerows([sum_text])
+                frame_info = [framerate if self.framerate else frame]
+                sum_text = [f'Active ROIs: {str(active_roi)}']
+                sum_text.extend(frame_info)
+                writer.writerows(sum_text)
 
             # label with the maximum correlation withs one of the spike templates
             max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
@@ -1226,7 +1228,7 @@ class Calcium(QWidget):
             units = "seconds" if self.framerate else "frames"
             sum_file.write(f'File: {self.img_path}\n')
             if self.framerate:
-                sum_file.write(f'Framerate: {self.framerate} frames/seconds\n')
+                sum_file.write(f'Framerate: {self.framerate} fps\n')
             else:
                 sum_file.write('No framerate detected\n')
             sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
@@ -1248,7 +1250,7 @@ class Calcium(QWidget):
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 if self.framerate:
-                    frequency = avg_num_events/(self.framerate*self.img_stack.shape[0])
+                    frequency = avg_num_events/(self.img_stack.shape[0]/self.framerate)
                     sum_file.write(f'\tAverage Frequency (num_events/ms): {frequency}\n')
                 else:
                     if len(self.img_stack) > 3:
