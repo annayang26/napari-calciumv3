@@ -2,7 +2,6 @@ import csv
 import importlib.resources
 import json
 import os
-import time
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -11,6 +10,7 @@ import tensorflow.keras.backend as K
 import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
+from PIL import Image
 from qtpy.QtWidgets import (
     QFileDialog,
     QMessageBox,
@@ -1141,8 +1141,10 @@ class Calcium(QWidget):
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
             # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
-            roi_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-            roi_layer.save(save_path + '/ROIs.jpg')
+            self.viewer.add_image(label_array, name='roi_image', visible=False)
+            im = Image.fromarray(label_array)
+            im.save(save_path + '/ROIs.jpg')
+            # roi_layer.save(save_path + '/ROIs.jpg')
             # self.label_layer.print_png(save_path + '/ROIs.svg')
 
             # the centers of each ROI
