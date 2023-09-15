@@ -6,6 +6,8 @@ import time
 from typing import TYPE_CHECKING
 
 import numpy as np
+import tensorflow as tf
+import tensorflow.keras.backend as K
 import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
@@ -119,7 +121,6 @@ class Calcium(QWidget):
                 print("self img name: ", self.img_name)
 
                 self._on_click()
-                time.sleep(5)
                 self.save_files()
                 self.clear()
 
@@ -226,7 +227,6 @@ class Calcium(QWidget):
             self.img_name = self.viewer.layers[0].name
             self.img_path = self.viewer.layers[0].source.path
 
-        #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
         # print("img_size[0] is ", self.img_stack.shape[0])
         # print("img_size[1] is ", self.img_stack.shape[1])
         # print("img_size[-1] is ", self.img_stack.shape[-1])
@@ -234,9 +234,6 @@ class Calcium(QWidget):
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-
-        import tensorflow as tf
-        import tensorflow.keras.backend as K
 
         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
         background_layer = 0
