@@ -1104,13 +1104,13 @@ class Calcium(QWidget):
             with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
                 if self.framerate:
-                    fields = ['ROI', 'Num_events', 'Frequency (num of events/ms)']
+                    fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
                 else:
                     fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
                 writer.writerow(fields)
                 writer.writerows(num_events)
                 sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
-                sum_text.extend([f'Framerate: {frame_info}'])
+                sum_text.extend([[f'Framerate: {frame_info}']])
                 writer.writerows(sum_text)
 
             # label with the maximum correlation withs one of the spike templates
@@ -1250,7 +1250,7 @@ class Calcium(QWidget):
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 if self.framerate:
                     frequency = avg_num_events/(self.img_stack.shape[0]/self.framerate)
-                    sum_file.write(f'\tAverage Frequency (num_events/ms): {frequency}\n')
+                    sum_file.write(f'\tAverage Frequency (num_events/s): {frequency}\n')
                 else:
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
