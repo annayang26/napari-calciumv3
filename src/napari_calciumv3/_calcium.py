@@ -107,7 +107,6 @@ class Calcium(QWidget):
 
                 img = tff.imread(file_path, is_ome=False, is_mmstack=False)
 
-                time.sleep(5)
                 self.viewer.add_image(img,
                                       name=file_name)
 
@@ -120,8 +119,8 @@ class Calcium(QWidget):
                 print("self img name: ", self.img_name)
 
                 self._on_click()
+                time.sleep(5)
                 self.save_files()
-                time.sleep(10)
                 self.clear()
 
         print(f'{folder_names[0]} is done batch processing')
