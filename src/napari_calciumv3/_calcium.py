@@ -1142,12 +1142,11 @@ class Calcium(QWidget):
 
             # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
             self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+            print(label_array)
             im = Image.fromarray((label_array*255).astype(np.uint8))
-            size = label_array.size[0:1]
-            bk_im = Image.new('RGBA', size, "black")
+            bk_im = Image.new('RGBA', (self.img_stack.shape[0], self.img_stack.shape[0]), "black")
             bk_im.paste(im)
             bk_im.save(save_path + '/ROIs.png')
-            # roi_layer.save(save_path + '/ROIs.jpg')
             # self.label_layer.print_png(save_path + '/ROIs.png')
 
             # the centers of each ROI
