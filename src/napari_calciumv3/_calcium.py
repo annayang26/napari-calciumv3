@@ -1143,7 +1143,8 @@ class Calcium(QWidget):
             # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
             self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
             im = Image.fromarray((label_array*255).astype(np.uint8))
-            bk_im = Image.new('RGBA', label_array.size, "black")
+            size = label_array.size[0:1]
+            bk_im = Image.new('RGBA', size, "black")
             bk_im.paste(im)
             bk_im.save(save_path + '/ROIs.png')
             # roi_layer.save(save_path + '/ROIs.jpg')
