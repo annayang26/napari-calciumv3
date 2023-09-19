@@ -5,10 +5,12 @@ import os
 from typing import TYPE_CHECKING
 
 import numpy as np
+import tensorflow as tf
+import tensorflow.keras.backend as K
 import tifffile as tff
-import zarr
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
+from PIL import Image
 from qtpy.QtWidgets import (
     QFileDialog,
     QMessageBox,
@@ -104,34 +106,30 @@ class Calcium(QWidget):
 
             if file_name.endswith(".ome.tif"):
                 file_path = os.path.join(folder_names[0], file_name)
-                print("file_path: ", file_path)
 
                 img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                print("img array shape: ", img.shape)
+
                 self.viewer.add_image(img,
                                       name=file_name)
 
                 self.img_stack = self.viewer.layers[0].data
                 self.img_path = file_path
                 self.img_name = file_name
-                print("Opening the OME.TIF file...")
+
                 print("self img stack: ", self.img_stack.shape)
                 print("self img path ", self.img_path)
                 print("self img name: ", self.img_name)
 
-                print("Analyzing...")
                 self._on_click()
-                print("finished analysis")
                 self.save_files()
-                print("Saved the analysis folder")
                 self.clear()
 
         print(f'{folder_names[0]} is done batch processing')
 
         self._compile_data(folder_names[0])
 
-    def _compile_data(self, base_folder, file_name="summary.txt",
-                    variable=None, compile_name="compile_data.csv"):
+    def _compile_data(self, base_folder,
+                      file_name="summary.txt", variable=None):
         '''
         to compile all the data from different folders into one csv file
         options to include the line name and the variable name(s) to look for; 
@@ -180,14 +178,20 @@ class Calcium(QWidget):
 
             # find the variable in the file
             for line in result:
-                for var in variable:
-                    if var.lower().strip() in line.lower():
+                for old_var in variable:
+                    if old_var.lower().strip() in line.lower():
+                        items = line.split(":")
+                        var = items[0].strip()
+
                         if var not in data:
                             data[var] = []
-                        items = line.split(":")
-                        for item in items:
-                            if any(char.isdigit() for char in item):
-                                data[var] = item
+
+                        values = items[1].strip().split(" ")
+                        num = values[0].strip("%")
+
+                        if values[0] == "N/A":
+                            num = 0
+                        data[var] = float(num)
 
             if len(data) > 1:
                 files.append(data)
@@ -196,10 +200,11 @@ class Calcium(QWidget):
 
         if len(files) > 0:
             # write into a new csv file
-            field_names = ["name"]
-            field_names.extend(variable)
+            field_names = list(data.keys())
 
-            with open(base_folder + "/" + compile_name, 'w') as c_file:
+            compile_name = os.path.basename(base_folder) + "_compile_file.csv"
+
+            with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)
@@ -222,18 +227,13 @@ class Calcium(QWidget):
             self.img_name = self.viewer.layers[0].name
             self.img_path = self.viewer.layers[0].source.path
 
-        #TODO: if opening a stack of images, the shape will be (num_wells, num_frames, img-size, img_size)
-        print("img_size[0] is ", self.img_stack.shape[0])
-        print("img_size[1] is ", self.img_stack.shape[1])
-        print("img_size[-1] is ", self.img_stack.shape[-1])
+        # print("img_size[0] is ", self.img_stack.shape[0])
+        # print("img_size[1] is ", self.img_stack.shape[1])
+        # print("img_size[-1] is ", self.img_stack.shape[-1])
         img_size = self.img_stack.shape[-1]
 
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-
-
-        import tensorflow as tf
-        import tensorflow.keras.backend as K
 
         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
         background_layer = 0
@@ -479,6 +479,7 @@ class Calcium(QWidget):
     #TODO: finish the documentation here
     def plot_values(self, dff, labels, layer, spike_times) -> None:
         '''
+        generate plots for dff, labeled_ROI, layers, and spike times
 
         parameters:
         --------------
@@ -525,9 +526,9 @@ class Calcium(QWidget):
         else:
             self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
-    # TODO: finish the documentation
-    def find_peaks(self, roi_dff, template_file, spk_threshold, reset_threshold):
+    def find_peaks(self, roi_dff: dict, template_file: str, spk_threshold: float, reset_threshold: float):
         '''
+        find the spikes from the fluorescence signals
 
         parameters:
         --------------
@@ -535,7 +536,7 @@ class Calcium(QWidget):
         template_file: str. the template file for spikes
         spk_threshold: float. threshold for determining if the spike \
             is correlated with the template
-        reset_threshold:
+        reset_threshold: float. threshold for reseting the peak finding
 
         returns:
         --------------
@@ -610,7 +611,7 @@ class Calcium(QWidget):
 
         return spike_times
 
-    def analyze_ROI(self, roi_dff, spk_times):
+    def analyze_ROI(self, roi_dff: dict, spk_times: dict):
         '''
         to analyze the labeled ROI
 
@@ -655,7 +656,7 @@ class Calcium(QWidget):
         # print(roi_analysis)
         return roi_analysis, framerate
 
-    def get_amplitude(self, roi_dff, spk_times, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
+    def get_amplitude(self, roi_dff: dict, spk_times: dict, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
         '''
         find the locations (frames) of the peaks, with the peak indices and base indices
 
@@ -782,7 +783,7 @@ class Calcium(QWidget):
         #     print('base:', amplitude_info[r]['base_indices'])
         return amplitude_info
 
-    def get_time_to_rise(self, amplitude_info, framerate):
+    def get_time_to_rise(self, amplitude_info: dict, framerate: float):
         '''
         get a list of time to rise for each peak throughout all the frames
 
@@ -813,7 +814,7 @@ class Calcium(QWidget):
         # print('time to rise:', time_to_rise)
         return time_to_rise
 
-    def get_max_slope(self, roi_dff, amplitude_info):
+    def get_max_slope(self, roi_dff: dict, amplitude_info: dict):
         '''
         calculate the maximum slope of each peak of each label
 
@@ -840,7 +841,7 @@ class Calcium(QWidget):
 
         return max_slope
 
-    def analyze_IEI(self, spk_times, framerate):
+    def analyze_IEI(self, spk_times: dict, framerate: float):
         '''
         calculate the inter-event interval (IEI)
 
@@ -866,7 +867,7 @@ class Calcium(QWidget):
                     IEI[r].append(IEI_frames)
         return IEI
 
-    def analyze_active(self, spk_times):
+    def analyze_active(self, spk_times: dict):
         '''
         calculate the percentage of active cell bodies
 
@@ -886,7 +887,7 @@ class Calcium(QWidget):
         active = (active / len(spk_times)) * 100
         return active
 
-    def get_mean_connect(self, roi_dff, spk_times):
+    def get_mean_connect(self, roi_dff: dict, spk_times: dict):
         '''
         calculate functional connectivity described in Afshar Saber et al. 2018.
 
@@ -911,7 +912,7 @@ class Calcium(QWidget):
 
         return mean_connect
 
-    def get_connect_matrix(self, roi_dff, spk_times):
+    def get_connect_matrix(self, roi_dff: dict, spk_times: dict):
         '''
         to calculate a matrix of synchronizatiion index described in Patel et al. 2015
 
@@ -942,7 +943,7 @@ class Calcium(QWidget):
 
         return connect_matrix
 
-    def get_sync_index(self, x_phase, y_phase):
+    def get_sync_index(self, x_phase: list, y_phase: list):
         '''
         to calculate the pair-wise synchronization index of the two ROIs
 
@@ -961,7 +962,7 @@ class Calcium(QWidget):
 
         return sync_index
 
-    def get_phase_diff(self, x_phase, y_phase):
+    def get_phase_diff(self, x_phase: list, y_phase: list):
         '''
         to calculate the absolute phase difference between two calcium
             traces x and y phases from two different ROIs
@@ -981,7 +982,7 @@ class Calcium(QWidget):
 
         return phase_diff # Numpy array
 
-    def get_phase(self, total_frames, spks):
+    def get_phase(self, total_frames: int, spks: list):
         '''
         calculate the instantaneous phase between each frame that contains the peak 
 
@@ -1040,7 +1041,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.roi_signal):
                 raw_signal[:, i] = self.roi_signal[r]
 
-            with open(save_path + '/raw_signal.csv', 'w') as signal_file:
+            with open(save_path + '/raw_signal.csv', 'w', newline='') as signal_file:
                 writer = csv.writer(signal_file)
                 writer.writerow(self.roi_signal.keys())
                 for i in range(raw_signal.shape[0]):
@@ -1054,7 +1055,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.roi_dff):
                 dff_signal[:, i] = self.roi_dff[r]
 
-            with open(save_path + '/dff.csv', 'w') as dff_file:
+            with open(save_path + '/dff.csv', 'w', newline='') as dff_file:
                 writer = csv.writer(dff_file)
                 writer.writerow(self.roi_dff.keys())
                 for i in range(dff_signal.shape[0]):
@@ -1089,19 +1090,23 @@ class Calcium(QWidget):
                 num_events[i, 0] = i
                 num_events[i, 1] = num_e
                 if self.framerate:
-                    frame = self.framerate
-                    num_events[i, 2] = num_e / self.framerate
+                    frame_info = self.framerate
+                    num_events[i, 2] = num_e / (self.img_stack.shape[0]/self.framerate)
                 else:
-                    frame = len(self.img_stack)
-                    num_events[i, 2] = num_e / frame
+                    frame_info = len(self.img_stack)
+                    num_events[i, 2] = num_e / frame_info
 
-            with open(save_path + '/num_events.csv', 'w') as num_event_file:
-                writer = csv.writer(num_event_file)
-                fields = ['ROI', 'Num_events', 'Frequency']
+            with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
+                writer = csv.writer(num_event_file, dialect="excel")
+                if self.framerate:
+                    fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
+                else:
+                    fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
                 writer.writerow(fields)
                 writer.writerows(num_events)
-                sum_text = [f'Active ROIs: {str(active_roi)}', f'Total frame/exposure: {str(frame)}']
-                writer.writerows([sum_text])
+                sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
+                sum_text.extend([[f'Framerate: {frame_info}']])
+                writer.writerows(sum_text)
 
             # label with the maximum correlation withs one of the spike templates
             max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
@@ -1109,7 +1114,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.max_correlations):
                 max_cor[:, i] = self.max_correlations[r]
 
-            with open(save_path + '/max_correlations.csv', 'w') as cor_file:
+            with open(save_path + '/max_correlations.csv', 'w', newline='') as cor_file:
                 writer = csv.writer(cor_file)
                 writer.writerow(self.max_correlations.keys())
                 for i in range(max_cor.shape[0]):
@@ -1121,7 +1126,7 @@ class Calcium(QWidget):
             for i, r in enumerate(self.max_cor_templates):
                 max_cor_temps[:, i] = self.max_cor_templates[r]
 
-            with open(save_path + '/max_cor_templates.csv', 'w') as cor_temp_file:
+            with open(save_path + '/max_cor_templates.csv', 'w', newline='') as cor_temp_file:
                 writer = csv.writer(cor_temp_file)
                 writer.writerow(self.max_cor_templates.keys())
                 for i in range(max_cor_temps.shape[0]):
@@ -1136,9 +1141,12 @@ class Calcium(QWidget):
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
             # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
-            roi_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-            roi_layer.save(save_path + '/ROIs.tif')
-            # self.label_layer.print_png(save_path + '/ROIs.svg')
+            self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+            im = Image.fromarray((label_array*255).astype(np.uint8))
+            bk_im = Image.new(im.mode, im.size, "black")
+            bk_im.paste(im, im.split()[-1])
+            bk_im.save(save_path + '/ROIs.png')
+            # self.label_layer.print_png(save_path + '/ROIs.png')
 
             # the centers of each ROI
             roi_centers = {}
@@ -1157,7 +1165,7 @@ class Calcium(QWidget):
         else:
             self.general_msg('No ROI', 'Cannot save data')
 
-    def generate_summary(self, save_path):
+    def generate_summary(self, save_path:str) -> None:
         '''
         to generate a summary of the graphs that include the average and std of 
         amplitudes, time_to_rise, IEI, and mean connectivity
@@ -1165,10 +1173,6 @@ class Calcium(QWidget):
         parameters:
         ------------
         save_path: str.  the prefix of the tif file name
-
-        returns:
-        ------------
-        None
         '''
         total_amplitude = []
         total_time_to_rise = []
@@ -1196,13 +1200,12 @@ class Calcium(QWidget):
             # NOTE: get the average num of events
             avg_num_events = np.mean(np.array(total_num_events))
             std_num_events = np.std(np.array(total_num_events))
-            units = "seconds" if self.framerate else "frames"
             avg_time_to_rise = np.mean(np.array(total_time_to_rise))
-            avg_time_to_rise = f'{avg_time_to_rise} {units}'
+            # avg_time_to_rise = f'{avg_time_to_rise} {units}'
             std_time_to_rise = np.std(np.array(total_time_to_rise))
             if len(total_IEI) > 0:
                 avg_IEI = np.mean(np.array(total_IEI))
-                avg_IEI = f'{avg_IEI} {units}'
+                # avg_IEI = f'{avg_IEI} {units}'
                 std_IEI = np.std(np.array(total_IEI))
             else:
                 avg_IEI = 'N/A - Only one event per ROI'
@@ -1215,47 +1218,44 @@ class Calcium(QWidget):
         percent_active = self.analyze_active(self.spike_times)
 
         with open(save_path + '/summary.txt', 'w') as sum_file:
+            units = "seconds" if self.framerate else "frames"
             sum_file.write(f'File: {self.img_path}\n')
             if self.framerate:
-                sum_file.write(f'Framerate: {self.framerate} frames/seconds\n')
+                sum_file.write(f'Framerate: {self.framerate} fps\n')
             else:
                 sum_file.write('No framerate detected\n')
             sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
-            sum_file.write(f'Percent Active ROI: {percent_active}%\n')
+            sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
             if len(total_amplitude) > 0:
                 sum_file.write(f'\tAmplitude Standard Deviation: {std_amplitude}\n')
             sum_file.write(f'Average Max Slope: {avg_max_slope}\n')
             if len(total_max_slope) > 0:
                 sum_file.write(f'\tMax Slope Standard Deviation: {std_max_slope}\n')
-            sum_file.write(f'Average Time to Rise: {avg_time_to_rise}\n')
+            sum_file.write(f'Average Time to Rise ({units}): {avg_time_to_rise}\n')
             if len(total_time_to_rise) > 0:
                 sum_file.write(f'\tTime to Rise Standard Deviation: {std_time_to_rise}\n')
-            sum_file.write(f'Average Interevent Interval (IEI): {avg_IEI}\n')
+            sum_file.write(f'Average Interevent Interval (IEI) ({units}): {avg_IEI}\n')
             if len(total_IEI) > 0:
                 sum_file.write(f'\tIEI Standard Deviation: {std_IEI}\n')
             # NOTE: num_events
             sum_file.write(f'Average Number of events: {avg_num_events}\n')
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
-                print("framerate ", self.framerate)
                 if self.framerate:
-                    sum_file.write(f'\tFrequency: {avg_num_events/self.framerate} per frame/second\n')
+                    frequency = avg_num_events/(self.img_stack.shape[0]/self.framerate)
+                    sum_file.write(f'\tAverage Frequency (num_events/s): {frequency}\n')
                 else:
-                    print(len(self.img_stack))
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
                     else:
                         frame = self.img_stack.shape[0]
-                    sum_file.write(f'\tFrequency: {avg_num_events/frame} per frame\n')
-                max_event = np.argmax(total_num_events)
-                max_num_event = np.max(total_num_events)
-                sum_file.write(f'\t{max_event}th ROI has the most number of events: {max_num_event} peaks\n')
+                    sum_file.write(f'\tFrequency (num_events/frame): {avg_num_events/frame}\n')
 
             sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
     # Taken from napari-calcium plugin by Federico Gasparoli
-    def general_msg(self, message_1: str, message_2: str):
+    def general_msg(self, message_1: str, message_2: str) -> None:
         '''
         Generate message for the viewer after analysis
 
