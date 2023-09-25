@@ -34,7 +34,7 @@ class Calcium(QWidget):
         self.viewer = napari_viewer
         self.setLayout(QVBoxLayout())
 
-        self.bp_btn = QPushButton("Select a Folder")
+        self.bp_btn = QPushButton("Batch Process (spontaneous)")
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
@@ -97,12 +97,6 @@ class Calcium(QWidget):
 
         # traverse through all the ome.tif files in the selected folder
         for file_name in os.listdir(folder_names[0]):
-
-            save_path = file_name[0:-4]
-            # check if the file has already been analyzed
-            if os.path.isdir(save_path):
-                print(f"save_path is {save_path}")
-                continue
 
             if file_name.endswith(".ome.tif"):
                 file_path = os.path.join(folder_names[0], file_name)
@@ -227,15 +221,11 @@ class Calcium(QWidget):
             self.img_name = self.viewer.layers[0].name
             self.img_path = self.viewer.layers[0].source.path
 
-        # print("img_size[0] is ", self.img_stack.shape[0])
-        # print("img_size[1] is ", self.img_stack.shape[1])
-        # print("img_size[-1] is ", self.img_stack.shape[-1])
         img_size = self.img_stack.shape[-1]
-
         dir_path = os.path.dirname(os.path.realpath(__file__))
         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-
         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+
         background_layer = 0
         minsize = 100
         self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
@@ -250,7 +240,6 @@ class Calcium(QWidget):
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
-            # print('ROI average prediction:', self.get_ROI_prediction(self.roi_dict, self.prediction_layer.data))
 
     def segment(self, img_stack, minsize, background_label):
         '''
@@ -381,26 +370,6 @@ class Calcium(QWidget):
                 small_roi.append(r)
         return area, small_roi
 
-    #TODO: fill out the documentation
-    def get_ROI_prediction(self, roi_dict, prediction):
-        '''
-        get the average prediction of the s
-
-        Parameters:
-        --------------
-        roi_dict:
-        prediction:
-
-        Returns:
-        --------------
-        avg_pred:
-        '''
-        avg_pred = {}
-        for r in roi_dict:
-            roi_coords = np.array(roi_dict[r]).T.tolist()
-            avg_pred[r] = np.mean(prediction[tuple(roi_coords)])
-        return avg_pred
-
     def calculate_ROI_intensity(self, roi_dict, img_stack):
         '''
         calculate the average intensity of each roi
@@ -476,7 +445,6 @@ class Calcium(QWidget):
             median.append(np.median(f[x:y]))
         return background, median
 
-    #TODO: finish the documentation here
     def plot_values(self, dff, labels, layer, spike_times) -> None:
         '''
         generate plots for dff, labeled_ROI, layers, and spike times
@@ -484,9 +452,9 @@ class Calcium(QWidget):
         parameters:
         --------------
         dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
-        labels:
-        layer:
-        spike_times:
+        labels: ndarray. a labeled matrix of segmentations of the same type as markers
+        layer: ndarray. the label/segmentation layer image
+        spike_times: dict. a dictionary of label-position pairs
 
         returns:
         --------------
