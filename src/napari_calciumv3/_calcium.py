@@ -1108,13 +1108,11 @@ class Calcium(QWidget):
                 i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-            # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
             self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
             bk_im.save(save_path + '/ROIs.png')
-            # self.label_layer.print_png(save_path + '/ROIs.png')
 
             # the centers of each ROI
             roi_centers = {}
