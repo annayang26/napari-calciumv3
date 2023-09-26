@@ -2,12 +2,15 @@ import csv
 import importlib.resources
 import json
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
+from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -38,6 +41,9 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
+        self.viewer.window.add_dock_widget(self._evk_batch_process)
+        self._evk_batch_process()
+
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
         self.layout().addWidget(btn)
@@ -57,7 +63,6 @@ class Calcium(QWidget):
         self.clear_btn.clicked.connect(self.clear)
         self.layout().addWidget(self.clear_btn)
 
-        self.batch_process = False
         self.img_stack = None
         self.img_name = None
         self.labels = None
@@ -78,6 +83,13 @@ class Calcium(QWidget):
         self.img_path = None
         self.colors = []
 
+        # batch process
+        self.batch_process = False
+        self.unet_init = False
+        # batch process (evoked)
+        self.blue_file = None
+        self.ca_file = None
+
     def _select_folder(self) -> None:
         '''
         allow user to select a folder to analyze all the tif file in the folder
@@ -96,31 +108,44 @@ class Calcium(QWidget):
         self.batch_process = True
 
         # traverse through all the ome.tif files in the selected folder
-        for file_name in os.listdir(folder_names[0]):
+        for folder in folder_names:
+            # for file_name in Path.iterdir(folder):
+            for file_name in os.listdir(folder):
 
-            if file_name.endswith(".ome.tif"):
-                file_path = os.path.join(folder_names[0], file_name)
+                if file_name.endswith(".ome.tif"):
+                    file_path = os.path.join(folder, file_name)
+                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.viewer.add_image(img, name=file_name)
 
-                img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.img_stack = self.viewer.layers[0].data
+                    self.img_path = file_path
+                    self.img_name = file_name
 
-                self.viewer.add_image(img,
-                                      name=file_name)
+                    # only initiate the trained model once
+                    if not self.unet_init:
+                        img_size = self.img_stack.shape[-1]
+                        dir_path = os.path.dirname(os.path.realpath(__file__))
+                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                        self.unet_init = True
 
-                self.img_stack = self.viewer.layers[0].data
-                self.img_path = file_path
-                self.img_name = file_name
+                    print("self img stack: ", self.img_stack.shape)
+                    print("self img path ", self.img_path)
+                    print("self img name: ", self.img_name)
 
-                print("self img stack: ", self.img_stack.shape)
-                print("self img path ", self.img_path)
-                print("self img name: ", self.img_name)
+                    self._on_click()
+                    self.save_files()
+                    self.clear()
 
-                self._on_click()
-                self.save_files()
-                self.clear()
+            print(f'{folder} is done batch processing')
 
-        print(f'{folder_names[0]} is done batch processing')
+            # reset the model
+            self.model_unet = None
+            self.unet_init = False
+            self._compile_data(folder)
 
-        self._compile_data(folder_names[0])
+        print('Batch Processing (spontaneous activity) Done')
+        self.batch_process = False
 
     def _compile_data(self, base_folder,
                       file_name="summary.txt", variable=None):
@@ -205,6 +230,36 @@ class Calcium(QWidget):
         else:
             print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
 
+    def _evk_select(self) -> None:
+        '''
+        batch process for evoked activity
+        '''
+        pass
+
+        # select the blue light area
+        # select the folder with all the raw calcium imaging data
+
+            # make prediction and segemntation
+
+            # overlay the blue light image over the labeled layer to group the cells
+
+            # save analysis
+
+    def _blue_lgt_file(self):
+        pass
+        # further process the blue light file
+
+        # should return the processed the blue light image as an array
+
+    def _evk_batch(self):
+        '''
+        '''
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.Directory)
+        folder_name = dlg.selectedFiles()
+
+        self.ca_file.setText(folder_name)
+
     def _on_click(self) -> None:
         '''
         once hit the "Analyze" botton, the program will load the trained
@@ -221,10 +276,10 @@ class Calcium(QWidget):
             self.img_name = self.viewer.layers[0].name
             self.img_path = self.viewer.layers[0].source.path
 
-        img_size = self.img_stack.shape[-1]
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+            img_size = self.img_stack.shape[-1]
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
 
         background_layer = 0
         minsize = 100
@@ -1260,11 +1315,13 @@ class Calcium(QWidget):
             self.viewer.layers.pop(i)
             i -= 1
 
+        if not self.batch_process:
+            self.model_unet = None
+
         self.img_stack = None
         self.img_name = None
         self.labels = None
         self.label_layer = None
-        self.model_unet = None
         self.prediction_layer = None
         self.roi_dict = None
         self.roi_signal = None
@@ -1282,3 +1339,75 @@ class Calcium(QWidget):
 
         self.axes.cla()
         self.canvas_traces.draw_idle()
+
+    @magicgui(call_button="batch process (evoked activity)",
+              blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
+              ca_file={"label": "Choose the Calcium Imaging directory:", "mode": "d"})
+    def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
+        self.blue_file = blue_file
+        self.ca_file = ca_file
+        print("blue file: ", self.blue_file, "type: ", type(self.blue_file))
+        print("ca file: ", self.ca_file, "type: ", type(self.ca_file))
+        self.batch_proess = True
+        self._process_blue()
+        # old_parent = ''
+        # for file in Path(self.ca_file).glob('**/*.ome.tif'):
+        #     img = tff.imread(file, is_ome=False, is_mmstack=False)
+
+        #     self.viewer.add(img, name=file.stem)
+        #     self.img_stack = self.viewer.layers[0].data
+        #     self.img_path = file
+        #     self.img_name = file.stem
+
+        #     if old_parent != file.parent:
+        #         # set the parent folder
+        #         old_parent = file.parent
+
+        #         # initiate the unet model
+        #         img_size = self.img_stack.shape[-1]
+        #         dir_path = os.path.dirname(os.path.realpath(__file__))
+        #         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+        #         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+        #         self.unet_init = True
+
+        #     print(old_parent == file.parent)
+
+        #     # produce the prediction and labeled layers
+        #     background_layer = 0
+        #     minsize = 100
+        #     self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+
+
+    def _process_blue(self):
+        '''
+        process the stimulated area file into a mask
+        '''
+
+        blue_img = cv2.imread(self.blue_file, True)
+        blue_img_grey = cv2.cvtColor(blue_img, cv2.COLOR_BAYER_BG2GRAY)
+        blue_img_blur = cv2.GaussianBlur(blue_img_grey, (blue_img.shape[0], blue_img.shape[1]), 0)
+        blue_img_f, th = cv2.threshold(blue_img_blur, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+
+        print("th type: ", type(th), " th shape; ", (th.shape[0], th.shape[1]))
+
+
+        # for file in Path.iterdir(self.ca_file):
+        #     if Path(file).suffix == ".ome.tif":
+        #         img = tff.imread(file, is_ome=False, is_mmstack=False)
+
+        #         self.viewer.add(img, name=file.stem)
+
+        #         self.img_stack = self.viewer.layers[0].data
+        #         self.img_path = file
+        #         self.img_name = file.stem
+
+        #         # only initiate the trained model once
+        #         if not self.unet_init:
+        #             img_size = self.img_stack.shape[-1]
+        #             dir_path = os.path.dirname(os.path.realpath(__file__))
+        #             path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+        #             self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+        #             self.unet_init = True
+                
+
+
