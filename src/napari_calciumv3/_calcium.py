@@ -41,8 +41,8 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
-        self.viewer.window.add_dock_widget(self._evk_batch_process)
-        self._evk_batch_process()
+        # self.viewer.window.add_dock_widget(self._evk_batch_process)
+        # self._evk_batch_process()
 
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
@@ -108,12 +108,13 @@ class Calcium(QWidget):
         self.batch_process = True
 
         # traverse through all the ome.tif files in the selected folder
-        for folder in folder_names:
+        for (dir_path, _, folder_list) in os.walk(folder_names[0]):
             # for file_name in Path.iterdir(folder):
-            for file_name in os.listdir(folder):
+            print("dir_path: ", dir_path)
+            for file_name in os.listdir(dir_path):
 
                 if file_name.endswith(".ome.tif"):
-                    file_path = os.path.join(folder, file_name)
+                    file_path = os.path.join(dir_path, file_name)
                     img = tff.imread(file_path, is_ome=False, is_mmstack=False)
                     self.viewer.add_image(img, name=file_name)
 
@@ -137,12 +138,12 @@ class Calcium(QWidget):
                     self.save_files()
                     self.clear()
 
-            print(f'{folder} is done batch processing')
+            print(f'{dir_path} is done batch processing')
 
             # reset the model
             self.model_unet = None
             self.unet_init = False
-            self._compile_data(folder)
+            self._compile_data(dir_path)
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
@@ -1344,10 +1345,10 @@ class Calcium(QWidget):
               blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
               ca_file={"label": "Choose the Calcium Imaging directory:", "mode": "d"})
     def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
-        self.blue_file = blue_file
-        self.ca_file = ca_file
-        print("blue file: ", self.blue_file, "type: ", type(self.blue_file))
-        print("ca file: ", self.ca_file, "type: ", type(self.ca_file))
+        self.blue_file = str(blue_file)
+        self.ca_file = str(ca_file)
+        # print("blue file: ", self.blue_file, "type: ", type(self.blue_file))
+        # print("ca file: ", self.ca_file, "type: ", type(self.ca_file))
         self.batch_proess = True
         self._process_blue()
         # old_parent = ''
