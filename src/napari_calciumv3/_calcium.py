@@ -141,10 +141,11 @@ class Calcium(QWidget):
 
             print(f'{folder_path} is done batch processing')
 
+            if self.model_unet:
+                self._compile_data(folder_path)
             # reset the model
             self.model_unet = None
             self.unet_init = False
-            self._compile_data(dir_path)
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
