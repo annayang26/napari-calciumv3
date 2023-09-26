@@ -115,6 +115,7 @@ class Calcium(QWidget):
 
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(dir_path, file_name)
+                    print("file_path: ", file_path)
                     img = tff.imread(file_path, is_ome=False, is_mmstack=False)
                     self.viewer.add_image(img, name=file_name)
 
