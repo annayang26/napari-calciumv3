@@ -108,13 +108,13 @@ class Calcium(QWidget):
         self.batch_process = True
 
         # traverse through all the ome.tif files in the selected folder
-        for (dir_path, _, folder_list) in os.walk(folder_names[0]):
+        for (folder_path, _, folder_list) in os.walk(folder_names[0]):
             # for file_name in Path.iterdir(folder):
-            print("dir_path: ", dir_path)
-            for file_name in os.listdir(dir_path):
+            print("dir_path: ", folder_path)
+            for file_name in os.listdir(folder_path):
 
                 if file_name.endswith(".ome.tif"):
-                    file_path = os.path.join(dir_path, file_name)
+                    file_path = os.path.join(folder_path, file_name)
                     print("file_path: ", file_path)
                     img = tff.imread(file_path, is_ome=False, is_mmstack=False)
                     self.viewer.add_image(img, name=file_name)
@@ -139,7 +139,7 @@ class Calcium(QWidget):
                     self.save_files()
                     self.clear()
 
-            print(f'{dir_path} is done batch processing')
+            print(f'{folder_path} is done batch processing')
 
             # reset the model
             self.model_unet = None
