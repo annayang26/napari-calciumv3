@@ -428,7 +428,7 @@ class Calcium(QWidget):
                 small_roi.append(r)
         return area, small_roi
 
-    def calculate_ROI_intensity(self, roi_dict, img_stack):
+    def calculate_ROI_intensity(self, roi_dict, img_stack) -> dict:
         '''
         calculate the average intensity of each roi
 
@@ -439,7 +439,7 @@ class Calcium(QWidget):
 
         returns:
         ---------------
-        f: dict. the label (int)-intensity (a list of averaged intensity across 
+        f: dict. the label (int)-intensity (a list of averaged intensity across
             all the pixels with the same label at each frame) pair segmemted
         '''
         f = {}
@@ -739,7 +739,6 @@ class Calcium(QWidget):
                                     if dff_deriv[start_index] < 0:
                                         negative_count += 1
 
-                                    # TODO: maybe don't need this else statement?
                                     else:
                                         negative_count = 0
 
@@ -753,8 +752,7 @@ class Calcium(QWidget):
                             else:
                                 under_thresh_count = 0
 
-                            # stop searching for starting index 
-                            # NOTE: changed the operator from == to >=
+                            # stop searching for starting index
                             if under_thresh_count >= reset_num or start_index == 0 or total_count == total_dist:
                                 searching = False
 
@@ -794,13 +792,15 @@ class Calcium(QWidget):
                     # print(f'ROI {r} spike {i} - start_index: {start_index}, end_index: {end_index}')
 
                     # Save data
-                    # NOTE: why separate the spikes from the spike? 
                     spk_to_end = roi_dff[r][spk_times[r][i]:(end_index + 1)]
                     start_to_spk = roi_dff[r][start_index:(spk_times[r][i] + 1)]
-                    amplitude_info[r]['amplitudes'].append(np.max(spk_to_end) - np.min(start_to_spk)) 
-                    amplitude_info[r]['peak_indices'].append(int(spk_times[r][i] + np.argmax(spk_to_end)))
-                    amplitude_info[r]['base_indices'].append(int(spk_times[r][i] -
-                                                                 (len(start_to_spk) - (np.argmin(start_to_spk) + 1))))
+                    try:
+                        amplitude_info[r]['amplitudes'].append(np.max(spk_to_end) - np.min(start_to_spk))
+                        amplitude_info[r]['peak_indices'].append(int(spk_times[r][i] + np.argmax(spk_to_end)))
+                        amplitude_info[r]['base_indices'].append(int(spk_times[r][i] -
+                                                                    (len(start_to_spk) - (np.argmin(start_to_spk) + 1))))
+                    except ValueError:
+                        pass
 
         # for r in amplitude_info:
         #     print('ROI', r)
