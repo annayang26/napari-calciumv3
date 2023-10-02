@@ -1410,9 +1410,9 @@ class Calcium(QWidget):
         self.viewer.add_image(closing, name="closing")
         # only include the pixels that is brighter than 80
         print(f'closing shape: {closing.shape}, closing type: {type(closing)}')
-        st_area = np.argwhere(closing>threshold)
+        st_area = np.where(closing>threshold, 1, 0)
         print(f'st_area shape: {st_area.shape}, st_area type: {type(st_area)}')
-        st_area_t = cv2.transpose(st_area) #(x,y)
+        # st_area_t = cv2.transpose(st_area) #(x,y)
 
         # # to visualize the epllipse
         # epllipse = cv2.fitEllipse(st_area)
@@ -1421,7 +1421,7 @@ class Calcium(QWidget):
         # self.viewer.add_image(cv2.ellipse(blue_img, (int(x), int(y)), (int(d1/2), int(d2/2)), angle, 0, 360, (255, 255, 255), 3))
         # self.viewer.add_image(st_area_t, name="st_area")
 
-        return st_area_t
+        return st_area
 
     def group_st_cells(self, blue_area, overlap_th: float) -> dict:
         '''
