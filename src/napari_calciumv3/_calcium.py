@@ -1437,6 +1437,7 @@ class Calcium(QWidget):
         '''
         # find rois that is in the stimulated area
         st_roi = {}
+        print(f'blue area type: {type(blue_area)}\nblue area: {blue_area}')
         for r in self.roi_dict:
             overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
             perc_overlap = overlap / len(self.roi_dict[r])
