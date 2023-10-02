@@ -1327,8 +1327,8 @@ class Calcium(QWidget):
         old_parent = ''
         for file in Path(self.ca_file).glob('**/*.ome.tif'):
             img = tff.imread(file, is_ome=False, is_mmstack=False)
-            print(f'layers shape: {self.viewer.layers.shape}')
             self.viewer.add_image(img, name=file.stem)
+            print(f'layers shape: {self.viewer.layers.shape}')
             self.img_stack = self.viewer.layers[0].data
             self.img_path = file
             self.img_name = file.stem
