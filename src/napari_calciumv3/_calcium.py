@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-# import tensorflow as tf
-# import tensorflow.keras.backend as K
+import tensorflow as tf
+import tensorflow.keras.backend as K
 import tifffile as tff
 from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -1324,65 +1324,65 @@ class Calcium(QWidget):
 
         # assuming the same blue area for all the input ca imaging file
         st_area_pos = self.process_blue(blue_file_path, 80)
-        # old_parent = ''
-        # for file in Path(self.ca_file).glob('**/*.ome.tif'):
-        #     img = tff.imread(file, is_ome=False, is_mmstack=False)
-        #     self.viewer.add_image(img, name=file.stem)
-        #     self.img_stack = self.viewer.layers[1].data
-        #     self.img_path = file
-        #     self.img_name = file.stem
+        old_parent = ''
+        for file in Path(self.ca_file).glob('**/*.ome.tif'):
+            img = tff.imread(file, is_ome=False, is_mmstack=False)
+            self.viewer.add_image(img, name=file.stem)
+            self.img_stack = self.viewer.layers[1].data
+            self.img_path = file
+            self.img_name = file.stem
 
-        #     # if opening the file in a new experiment folder
-        #     if old_parent != file.parent:
-        #         # set the parent folder
-        #         old_parent = file.parent
+            # if opening the file in a new experiment folder
+            if old_parent != file.parent:
+                # set the parent folder
+                old_parent = file.parent
 
-        #         # initiate the unet model
-        #         img_size = self.img_stack.shape[-1]
-        #         dir_path = os.path.dirname(os.path.realpath(__file__))
-        #         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-        #         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-        #         self.unet_init = True
+                # initiate the unet model
+                img_size = self.img_stack.shape[-1]
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                self.unet_init = True
 
-        #     # produce the prediction and labeled layers
-        #     background_layer = 0
-        #     minsize = 100
-        #     self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+            # produce the prediction and labeled layers
+            background_layer = 0
+            minsize = 100
+            self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-        #     # to group the cells in the stimulated area vs not in the stimulated area
-        #     if self.label_layer:
-        #         st_rois, nst_rois = self.group_st_cells(st_area, 0.1)
-        #         spike_templates_file = 'spikes.json'
-        #         # stimulated cells
-        #         roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
-        #         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
+            # to group the cells in the stimulated area vs not in the stimulated area
+            if self.label_layer:
+                st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
+                spike_templates_file = 'spikes.json'
+                # stimulated cells
+                roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
+                roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
 
-        #         st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
-        #         roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+                st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
+                roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
 
-        #         # unstimulated cells
-        #         roi_signal_nst = self.calculate_ROI_intensity(nst_rois, self.img_stack)
-        #         roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-        #         nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
-        #         roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                # unstimulated cells
+                roi_signal_nst = self.calculate_ROI_intensity(nst_rois, self.img_stack)
+                roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
+                nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
+                roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
 
-        #         # calculate connetivity
-        #         self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-        #         self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-        #         self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
-        #         self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+                # calculate connetivity
+                self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+                self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
+                self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
+                self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
-        #         # save file
-        #         self.save_evoked_files()
+                # save file
+                self.save_evoked_files()
 
-        #     # clear
-        #     self.clear()
+            # clear
+            self.clear()
 
-        # self.model_unet = None
-        # self.batch_process = False
-        # self.blue_file = None
-        # self.ca_file = None
-        # self.unet_init = False
+        self.model_unet = None
+        self.batch_process = False
+        self.blue_file = None
+        self.ca_file = None
+        self.unet_init = False
 
     def process_blue(self, blue_file_path: str, threshold: int):
         '''
@@ -1406,7 +1406,7 @@ class Calcium(QWidget):
         erosion = cv2.erode(closing, kernel)
         kernel = np.ones((10,10), np.uint8)
         closing = cv2.morphologyEx(erosion, cv2.MORPH_CLOSE, kernel)
-        # self.viewer.add_image(closing, name="closing")
+
         # only include the pixels that is brighter than 80
         st_area = np.where(closing>threshold, 1, 0)
         self.viewer.add_image(st_area, name="stimulated area")
