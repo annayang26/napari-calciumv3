@@ -1331,8 +1331,7 @@ class Calcium(QWidget):
             self.img_stack = self.viewer.layers[1].data
             self.img_path = file
             self.img_name = file.stem
-            print(f'img_shape: {self.img_stack.shape}')
-            print(f'layer size: {len(self.viewer.layers)}')
+
             # if opening the file in a new experiment folder
             if old_parent != file.parent:
                 # set the parent folder
@@ -1344,10 +1343,6 @@ class Calcium(QWidget):
                 path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
                 self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
                 self.unet_init = True
-
-            print(old_parent == file.parent)
-
-
 
             # produce the prediction and labeled layers
             background_layer = 0
@@ -1456,8 +1451,8 @@ class Calcium(QWidget):
             del nst_roi[label]
 
         # regroup the labels
-        print(f'label-shape: {self.labels.shape[0], self.labels.shape[1]}')
-        print(f'\t{self.labels}')
+        print(f'label-shape: {self.labels.shape}')
+        print(f'\t{self.labels[0, :, :]}')
         print(f'label type: {type(self.labels)}')
         st_label = self.labels[st_roi.keys()]
         print(st_label)
