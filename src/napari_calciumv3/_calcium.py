@@ -1415,7 +1415,7 @@ class Calcium(QWidget):
             for j in range(st_area.shape[1]):
                 if st_area[i][j] == 1:
                     st_area_pos.append([i, j]) # row, column
-                    print(st_area_pos[i, j])
+                    print(st_area_pos[-1])
 
         # # to visualize the epllipse
         # epllipse = cv2.fitEllipse(st_area)
