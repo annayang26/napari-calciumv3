@@ -1451,12 +1451,16 @@ class Calcium(QWidget):
             del nst_roi[label]
 
         # regroup the labels
-        print(f'label-shape: {self.labels.shape}')
-        print(f'\t{self.labels[0, :, :]}')
-        print(f'label type: {type(self.labels)}')
-        st_label = self.labels[st_roi.keys()]
-        print(st_label)
-        nst_label = self.labels[nst_roi.keys()]
+        st_label = np.zeros_like(self.labels)
+        nst_label = np.zeros_like(self.labels)
+
+        for r in st_roi:
+            roi_coords = np.array(st_roi[r]).T.tolist()
+            st_label[tuple(roi_coords)] = r
+
+        for r in nst_roi:
+            roi_coords = np.array(nst_roi[r]).T.tolist()
+            nst_label[tuple(roi_coords)] = r
 
         # create label layers for each group
         st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
