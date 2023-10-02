@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-import tensorflow as tf
-import tensorflow.keras.backend as K
+# import tensorflow as tf
+# import tensorflow.keras.backend as K
 import tifffile as tff
 from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -1407,9 +1407,11 @@ class Calcium(QWidget):
         blur = cv2.GaussianBlur(th,(5,5),0)
         kernel = np.ones((5,5),np.uint8)
         closing = cv2.morphologyEx(blur, cv2.MORPH_CLOSE, kernel)
+        self.viewer.add_image(closing, name="closing")
         # only include the pixels that is brighter than 80
-        print(f' closing shape: {closing.shape}, closing type: {type(closing)}')
+        print(f'closing shape: {closing.shape}, closing type: {type(closing)}')
         st_area = np.argwhere(closing>threshold)
+        print(f'st_area shape: {st_area.shape}, st_area type: {type(st_area)}')
         st_area_t = cv2.transpose(st_area) #(x,y)
 
         # # to visualize the epllipse
@@ -1417,7 +1419,6 @@ class Calcium(QWidget):
         # (x, y), (d1, d2), angle = epllipse
         # print(f'center: {(x, y)}, diameters: {(d1, d2)}')
         # self.viewer.add_image(cv2.ellipse(blue_img, (int(x), int(y)), (int(d1/2), int(d2/2)), angle, 0, 360, (255, 255, 255), 3))
-        self.viewer.add_image(closing, name="closing")
         # self.viewer.add_image(st_area_t, name="st_area")
 
         return st_area_t
