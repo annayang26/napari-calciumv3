@@ -1323,7 +1323,7 @@ class Calcium(QWidget):
         self.batch_proess = True
 
         # assuming the same blue area for all the input ca imaging file
-        st_area = self.process_blue(blue_file_path, 80)
+        st_area_pos = self.process_blue(blue_file_path, 80)
         # old_parent = ''
         # for file in Path(self.ca_file).glob('**/*.ome.tif'):
         #     img = tff.imread(file, is_ome=False, is_mmstack=False)
@@ -1398,20 +1398,20 @@ class Calcium(QWidget):
         st_area: ndarray. shape(number of pixel in the stimulated area, 1)
             an array of the position of the pixels in the stimulated area
         '''
-
-        # img = io.imread(blue_file_path, as_gray=True)
-        #using opencv
         blue_img = cv2.imread(blue_file_path, cv2.IMREAD_GRAYSCALE)
-        # self.viewer.add_image(blue_img, name='test_blue img')
-        ret,th = cv2.threshold(blue_img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        _,th = cv2.threshold(blue_img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         blur = cv2.GaussianBlur(th,(5,5),0)
         kernel = np.ones((5,5),np.uint8)
         closing = cv2.morphologyEx(blur, cv2.MORPH_CLOSE, kernel)
         self.viewer.add_image(closing, name="closing")
         # only include the pixels that is brighter than 80
         st_area = np.where(closing>threshold, 1, 0)
-        print(st_area)
-        # st_area_t = cv2.transpose(st_area) #(x,y)
+        self.viewer.add_image(st_area, name="stimulated area")
+        st_area_pos = []
+        for i in range(st_area.shape[0]):
+            for j in range(st_area.shape[1]):
+                if st_area[i][j] == 1:
+                    st_area_pos.append([i, j]) # row, column
 
         # # to visualize the epllipse
         # epllipse = cv2.fitEllipse(st_area)
@@ -1420,7 +1420,7 @@ class Calcium(QWidget):
         # self.viewer.add_image(cv2.ellipse(blue_img, (int(x), int(y)), (int(d1/2), int(d2/2)), angle, 0, 360, (255, 255, 255), 3))
         # self.viewer.add_image(st_area_t, name="st_area")
 
-        return st_area
+        return st_area_pos
 
     def group_st_cells(self, blue_area, overlap_th: float) -> dict:
         '''
@@ -1456,7 +1456,7 @@ class Calcium(QWidget):
             del nst_roi[label]
         print(f'nst_roi: {len(nst_roi.keys())}')
 
-        # regroup the labels
+        # regroup the labels; shape = (img_size, img_size)
         st_label = np.zeros_like(self.labels)
         nst_label = np.zeros_like(self.labels)
 
@@ -1474,12 +1474,18 @@ class Calcium(QWidget):
         st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
         nst_layer = self.viewer.add_labels(nst_label, name='Not stimulated cells', opacity=1)
 
-        # NOTE: leave the code to save the roi files here for now. 
+        # NOTE: leave the code to save the roi files here for now.
         # MOVE to save method later!!!
         label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
         st_label_array = np.stack((st_layer.data, ) * 4, axis=-1).astype(float)
         nst_label_array = np.stack((nst_layer.data, ) * 4, axis=-1).astype(float)
 
+        for i in range(1, np.max(self.labels) + 1):
+            color = self.label_layer.get_color(i)
+            color = (color[0], color[1], color[2], color[3])
+            self.colors.append(color)
+
+        color_num = 1
         for i in range(1, np.max(self.labels) + 1):
             i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
             label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
@@ -1487,6 +1493,7 @@ class Calcium(QWidget):
         print(f'st_label array shape: {st_label_array.shape}')
         print(f'st_label_array: {st_label_array}')
         for i in range(1, st_label_array.shape[0]+1):
+            color_num += 1
             i_coords = np.asarray(st_label_array == [i, i, i, i]).nonzeror()
             st_label_array[(i_coords[0], i_coords[1])] = self.colors[i-1]
 
