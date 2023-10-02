@@ -1443,12 +1443,15 @@ class Calcium(QWidget):
 
             if perc_overlap > overlap_th:
                 st_roi[r] = self.roi_dict[r]
+        print(f'roi_dict length: {len(self.roi_dict.keys())}')
+        print(f'st_roi length: {len(st_roi.keys())}')
 
         # group those that are not in the stimulated area
         nst_roi = self.roi_dict.copy()
 
         for label in st_roi:
             del nst_roi[label]
+        print(f'nst_roi: {len(nst_roi.keys())}')
 
         # regroup the labels
         st_label = np.zeros_like(self.labels)
@@ -1457,10 +1460,12 @@ class Calcium(QWidget):
         for r in st_roi:
             roi_coords = np.array(st_roi[r]).T.tolist()
             st_label[tuple(roi_coords)] = r
+        print(f' st_label shape: {st_label.shape}')
 
         for r in nst_roi:
             roi_coords = np.array(nst_roi[r]).T.tolist()
             nst_label[tuple(roi_coords)] = r
+        print(f'nst_label shape: {nst_label.shape}')
 
         # create label layers for each group
         st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
