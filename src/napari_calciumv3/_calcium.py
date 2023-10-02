@@ -1409,9 +1409,8 @@ class Calcium(QWidget):
         closing = cv2.morphologyEx(blur, cv2.MORPH_CLOSE, kernel)
         self.viewer.add_image(closing, name="closing")
         # only include the pixels that is brighter than 80
-        print(f'closing shape: {closing.shape}, closing type: {type(closing)}')
         st_area = np.where(closing>threshold, 1, 0)
-        print(f'st_area shape: {st_area.shape}, st_area type: {type(st_area)}')
+        print(st_area)
         # st_area_t = cv2.transpose(st_area) #(x,y)
 
         # # to visualize the epllipse
