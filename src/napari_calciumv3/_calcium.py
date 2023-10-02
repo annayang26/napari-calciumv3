@@ -1328,11 +1328,11 @@ class Calcium(QWidget):
         for file in Path(self.ca_file).glob('**/*.ome.tif'):
             img = tff.imread(file, is_ome=False, is_mmstack=False)
             self.viewer.add_image(img, name=file.stem)
-            print(f'layers shape: {self.viewer.layers.shape}')
             self.img_stack = self.viewer.layers[0].data
             self.img_path = file
             self.img_name = file.stem
-
+            print(f'img_shape: {self.img_stack.shape}')
+            print(f'layer size: {len(self.viewer.layers)}')
             # if opening the file in a new experiment folder
             if old_parent != file.parent:
                 # set the parent folder
@@ -1347,7 +1347,7 @@ class Calcium(QWidget):
 
             print(old_parent == file.parent)
 
-            print(f'img_shape: {self.img_stack.shape}')
+
 
             # produce the prediction and labeled layers
             background_layer = 0
