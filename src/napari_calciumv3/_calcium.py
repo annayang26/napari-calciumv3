@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-# import tensorflow as tf
-# import tensorflow.keras.backend as K
+import tensorflow as tf
+import tensorflow.keras.backend as K
 import tifffile as tff
 from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
