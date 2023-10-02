@@ -1419,7 +1419,7 @@ class Calcium(QWidget):
         # (x, y), (d1, d2), angle = epllipse
         # print(f'center: {(x, y)}, diameters: {(d1, d2)}')
         # self.viewer.add_image(cv2.ellipse(blue_img, (int(x), int(y)), (int(d1/2), int(d2/2)), angle, 0, 360, (255, 255, 255), 3))
-        # self.viewer.add_image(closing, name="closing")
+        self.viewer.add_image(closing, name="closing")
         # self.viewer.add_image(st_area_t, name="st_area")
 
         return st_area_t
