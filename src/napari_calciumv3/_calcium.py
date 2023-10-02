@@ -1407,7 +1407,7 @@ class Calcium(QWidget):
         # img = io.imread(blue_file_path, as_gray=True)
         #using opencv
         blue_img = cv2.imread(blue_file_path, cv2.IMREAD_GRAYSCALE)
-        self.viewer.add_image(blue_file_path, name='test_blue img')
+        # self.viewer.add_image(blue_img, name='test_blue img')
         ret,th = cv2.threshold(blue_img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
         blur = cv2.GaussianBlur(th,(5,5),0)
         kernel = np.ones((5,5),np.uint8)
