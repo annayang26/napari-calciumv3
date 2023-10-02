@@ -1406,7 +1406,7 @@ class Calcium(QWidget):
         # self.viewer.add_image(closing, name="closing")
         # only include the pixels that is brighter than 80
         st_area = np.where(closing>threshold, 1, 0)
-        erosion = cv2.morphologyEx(st_area, cv2.MORPH_ERODE, kernel)
+        erosion = cv2.erode(st_area, kernel)
         self.viewer.add_image(erosion, name="stimulated area")
         st_area_pos = []
         for i in range(st_area.shape[0]):
