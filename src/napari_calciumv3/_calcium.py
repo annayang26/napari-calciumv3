@@ -44,22 +44,6 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
-        self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.st_axes = self.st_canvas_traces.figure.subplots()
-        print(f'making st_axes figure: {type(self.st_axes)}')
-        self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
-        self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.nst_axes = self.nst_canvas_traces.figure.subplots()
-        self.nst_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.nst_axes_just_traces = self.nst_canvas_just_traces.figure.subplots()
-
-        # NOTE: figure out a way to avoid the error message
-        # w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
-        # self.viewer.window.add_dock_widget(self._evk_batch_process)
-        # self._evk_batch_process()
-        # self.viewer.window.add_dock_widget(w1)
-        # w1.clicked.connect(self._evk_batch_process)
         self.evoked_bp = QPushButton("Batch Process (evoked activity)")
         self.evoked_bp.clicked.connect(self._evk_select)
         self.layout().addWidget(self.evoked_bp)
@@ -113,7 +97,6 @@ class Calcium(QWidget):
         self.nst_colors = []
         self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
         self.st_axes = self.st_canvas_traces.figure.subplots()
-        print(f'making st_axes figure: {type(self.st_axes)}')
         self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
         self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
         self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
@@ -1342,13 +1325,9 @@ class Calcium(QWidget):
         self.axes.cla()
         self.canvas_traces.draw_idle()
 
-    @magicgui(call_button="batch process (evoked activity)",
-              blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
-              ca_file={"label": "Choose the Calcium Imaging directory:", "mode": "d"})
-    def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
-        blue_file_path = str(blue_file)
-        self.ca_file = str(ca_file)
-        st_area_pos = self.process_blue(blue_file_path, 80)
+    def _evk_batch_process(self, blue_file: str, ca_file: str) -> None:
+        self.ca_file = ca_file
+        st_area_pos = self.process_blue(blue_file, 80)
 
         self.batch_proess = True
         old_parent = ''
@@ -1428,6 +1407,14 @@ class Calcium(QWidget):
         '''
         dialog = EvokedInputDialog(self)
         dialog.exec_()
+
+        if dialog.select:
+            blue_file = dialog.blue_fpath
+            ca_file = dialog.ca_fpath
+            print(ca_file)
+            self._evk_batch_process(blue_file, ca_file)
+        else:
+            print("Please select the blue light file and the files to be batch processed")
 
     def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
@@ -1734,17 +1721,47 @@ class EvokedInputDialog(QDialog):
     def __init__(self, parent: QWidget):
         super().__init__(parent)
         self.setWindowTitle("Batch Process (evoked activity)")
-        self.blue_fpath = QFileDialog()
-        self.ca_fpath = QFileDialog()
-        self.select_btn = QPushButton("select")
+        self.blue_fpath = None
+        self.ca_fpath = None
+        self.select = False
+        self.blue_btn = QPushButton("select blue file")
+        self.blue_btn.clicked.connect(self._select_blue)
+        self.ca_btn = QPushButton("Select the folder")
+        self.ca_btn.clicked.connect(self._select_folder)
+        self.ok_btn = QPushButton("Ok")
         self.cancel_btn = QPushButton("Cancel")
 
-        layout = QGridLayout()
-        layout.addWidget(QLabel("Select the blue light file: "), 0, 0)
-        layout.addWidget(self.blue_fpath, 0, 1)
-        layout.addWidget(self.select_btn)
-        layout.addWidget(self.cancel_btn)
-        self.setLayout(layout)
+        self.layout = QGridLayout()
+        self.layout.addWidget(QLabel("Select the blue light file: "), 0, 0)
+        self.layout.addWidget(self.blue_btn, 0, 1)
+        self.layout.addWidget(QLabel("Select the folder to batch process: "), 2, 0)
+        self.layout.addWidget(self.ca_btn, 2, 1)
+        self.layout.addWidget(self.ok_btn, 4, 0)
+        self.layout.addWidget(self.cancel_btn, 4, 1)
+        self.setLayout(self.layout)
 
-        self.select_btn.clicked.connect(self.accept)
+        self.ok_btn.clicked.connect(self.accept)
         self.cancel_btn.clicked.connect(self.reject)
+        self.result()
+
+    def _select_blue(self):
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.ExistingFile)
+        if dlg.exec_():
+            self.blue_fpath = dlg.selectedFiles()[0]
+            self._update_fname(self.blue_fpath, 1)
+
+    def _select_folder(self):
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.Directory)
+        if dlg.exec_():
+            self.ca_fpath = dlg.selectedFiles()[0]
+            self._update_fname(self.ca_fpath, 3)
+
+    def _update_fname(self, file, row):
+        self.layout.addWidget(QLabel(file), row, 0)
+
+    def result(self):
+        if self.accepted:
+            self.select = True
+
