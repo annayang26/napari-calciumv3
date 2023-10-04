@@ -1332,9 +1332,6 @@ class Calcium(QWidget):
     def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
         blue_file_path = str(blue_file)
         self.ca_file = str(ca_file)
-
-        print(blue_file_path)
-        print(ca_file)
         st_area_pos = self.process_blue(blue_file_path, 80)
 
         self.batch_proess = True
@@ -1690,8 +1687,10 @@ class Calcium(QWidget):
             height_increment = max(dff_max)
 
             if st:
-                print(type(self.st_axes))
-                self.st_axes.set_prop_cycle(color=colors_to_plot)
+                print(self.st_canvas_traces)
+                st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+                st_axes = st_canvas_traces.figure.subplots()
+                st_axes.set_prop_cycle(color=colors_to_plot)
                 self.st_axes_just_traces.set_prop_cycle(color=colors_to_plot)
 
                 for height_index, d in enumerate(roi_to_plot):
