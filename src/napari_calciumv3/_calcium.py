@@ -330,8 +330,8 @@ class Calcium(QWidget):
 
         Returns:
         -------------
-        roi_dict: dict. a dictionary of label-position pairs
-        labels: ndarray. shape=() updated labels without the small ROIs
+        roi_dict: dict. a dictionary of label-position (a list of lists) pairs
+        labels: ndarray. shape=(img_size, img_size) updated labels without the small ROIs
         '''
         # sort the labels and filter the unique ones
         u_labels = np.unique(labels)
@@ -1349,7 +1349,6 @@ class Calcium(QWidget):
             minsize = 100
             self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-            print(self.roi_dict['1'])
             # to group the cells in the stimulated area vs not in the stimulated area
             if self.label_layer:
                 st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
@@ -1442,7 +1441,6 @@ class Calcium(QWidget):
         '''
         # find rois that is in the stimulated area
         st_roi = {}
-        print()
         # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
         for r in self.roi_dict:
             print(len(self.roi_dict[r]))
