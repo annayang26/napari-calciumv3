@@ -1324,39 +1324,44 @@ class Calcium(QWidget):
 
         # assuming the same blue area for all the input ca imaging file
         st_area_pos = self.process_blue(blue_file_path, 80)
+
+        print(f'length of st_pos: {len(st_area_pos)}, type: {type(st_area_pos)}')
         old_parent = ''
-        for file in Path(self.ca_file).glob('**/*.ome.tif'):
-            img = tff.imread(file, is_ome=False, is_mmstack=False)
-            self.viewer.add_image(img, name=file.stem)
-            self.img_stack = self.viewer.layers[1].data
-            self.img_path = file
-            self.img_name = file.stem
+        itera = True
+        while itera:
+            for file in Path(self.ca_file).glob('**/*.ome.tif'):
+                img = tff.imread(file, is_ome=False, is_mmstack=False)
+                self.viewer.add_image(img, name=file.stem)
+                self.img_stack = self.viewer.layers[1].data
+                self.img_path = file
+                self.img_name = file.stem
 
-            # if opening the file in a new experiment folder
-            if old_parent != file.parent:
-                # set the parent folder
-                old_parent = file.parent
+                # if opening the file in a new experiment folder
+                if old_parent != file.parent:
+                    # set the parent folder
+                    old_parent = file.parent
 
-                # initiate the unet model
-                img_size = self.img_stack.shape[-1]
-                dir_path = os.path.dirname(os.path.realpath(__file__))
-                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                self.unet_init = True
+                    # initiate the unet model
+                    img_size = self.img_stack.shape[-1]
+                    dir_path = os.path.dirname(os.path.realpath(__file__))
+                    path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                    self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                    self.unet_init = True
 
-            # produce the prediction and labeled layers
-            background_layer = 0
-            minsize = 100
-            self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+                # produce the prediction and labeled layers
+                background_layer = 0
+                minsize = 100
+                self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-            # to group the cells in the stimulated area vs not in the stimulated area
-            if self.label_layer:
-                st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
-        #         spike_templates_file = 'spikes.json'
-        #         # stimulated cells
-        #         roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
-        #         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-
+                
+                # to group the cells in the stimulated area vs not in the stimulated area
+                if self.label_layer:
+                    st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
+                    # spike_templates_file = 'spikes.json'
+                    # stimulated cells
+                    # roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
+                    # roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
+                itera = False
         #         st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
         #         roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
 
