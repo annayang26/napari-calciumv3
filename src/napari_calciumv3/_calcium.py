@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-# import tensorflow as tf
-# import tensorflow.keras.backend as K
+import tensorflow as tf
+import tensorflow.keras.backend as K
 import tifffile as tff
 from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
@@ -1385,7 +1385,7 @@ class Calcium(QWidget):
         # self.ca_file = None
         # self.unet_init = False
 
-    def process_blue(self, blue_file_path: str, threshold: int):
+    def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
         process the blue light file to get the position of the stimulatation area
 
