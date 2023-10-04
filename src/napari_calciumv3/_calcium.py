@@ -1353,7 +1353,7 @@ class Calcium(QWidget):
 
                 # to group the cells in the stimulated area vs not in the stimulated area
                 if self.label_layer:
-                    st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
+                    self.group_st_cells(st_area_pos, 0.1)
                     # spike_templates_file = 'spikes.json'
                     # stimulated cells
                     # roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
