@@ -10,12 +10,15 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
-from magicgui import magicgui, widgets
+from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
 from qtpy.QtWidgets import (
+    QDialog,
     QFileDialog,
+    QGridLayout,
+    QLabel,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -53,10 +56,13 @@ class Calcium(QWidget):
 
         # NOTE: figure out a way to avoid the error message
         # w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
-        self.viewer.window.add_dock_widget(self._evk_batch_process)
-        self._evk_batch_process()
+        # self.viewer.window.add_dock_widget(self._evk_batch_process)
+        # self._evk_batch_process()
         # self.viewer.window.add_dock_widget(w1)
         # w1.clicked.connect(self._evk_batch_process)
+        self.evoked_bp = QPushButton("Batch Process (evoked activity)")
+        self.evoked_bp.clicked.connect(self._evk_select)
+        self.layout().addWidget(self.evoked_bp)
 
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
@@ -1417,6 +1423,11 @@ class Calcium(QWidget):
         self.blue_file = None
         self.unet_init = False
 
+    def _evk_select(self):
+        '''
+        '''
+        dialog = EvokedInputDialog(self)
+        dialog.exec_()
 
     def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
@@ -1449,13 +1460,6 @@ class Calcium(QWidget):
             for j in range(st_area.shape[1]):
                 if st_area[i][j] == 1:
                     st_area_pos.add((i, j)) # row, column
-
-        # # to visualize the epllipse
-        # epllipse = cv2.fitEllipse(st_area)
-        # (x, y), (d1, d2), angle = epllipse
-        # print(f'center: {(x, y)}, diameters: {(d1, d2)}')
-        # self.viewer.add_image(cv2.ellipse(blue_img, (int(x), int(y)), (int(d1/2), int(d2/2)), angle, 0, 360, (255, 255, 255), 3))
-        # self.viewer.add_image(st_area_t, name="st_area")
 
         return st_area_pos
 
@@ -1726,3 +1730,21 @@ class Calcium(QWidget):
         else:
             self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
+class EvokedInputDialog(QDialog):
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setWindowTitle("Batch Process (evoked activity)")
+        self.blue_fpath = QFileDialog()
+        self.ca_fpath = QFileDialog()
+        self.select_btn = QPushButton("select")
+        self.cancel_btn = QPushButton("Cancel")
+
+        layout = QGridLayout()
+        layout.addWidget(QLabel("Select the blue light file: "), 0, 0)
+        layout.addWidget(self.blue_fpath, 0, 1)
+        layout.addWidget(self.select_btn)
+        layout.addWidget(self.cancel_btn)
+        self.setLayout(layout)
+
+        self.select_btn.clicked.connect(self.accept)
+        self.cancel_btn.clicked.connect(self.reject)
