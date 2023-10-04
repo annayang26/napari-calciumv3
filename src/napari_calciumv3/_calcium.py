@@ -91,6 +91,16 @@ class Calcium(QWidget):
         self.ca_file = None
         self.st_roi_signal = None
         self.st_roi_dff = None
+        self.st_colors = []
+        self.nst_colors = []
+        self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.st_axes = self.st_canvas_traces.figure.subplots()
+        self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
+        self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.nst_axes = self.nst_canvas_traces.figure.subplots()
+        self.nst_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.nst_axes_just_traces = self.nst_canvas_just_traces.figure.subplots()
 
     def _select_folder(self) -> None:
         '''
@@ -1320,71 +1330,79 @@ class Calcium(QWidget):
         blue_file_path = str(blue_file)
         self.ca_file = str(ca_file)
 
-        self.batch_proess = True
-
         # assuming the same blue area for all the input ca imaging file
-        st_area_pos = self.process_blue(blue_file_path, 80)
+        if blue_file_path is not None:
+            st_area_pos = self.process_blue(blue_file_path, 80)
+        self.batch_proess = True
         old_parent = ''
-        itera = True
-        while itera:
-            for file in Path(self.ca_file).glob('**/*.ome.tif'):
-                img = tff.imread(file, is_ome=False, is_mmstack=False)
-                self.viewer.add_image(img, name=file.stem)
-                self.img_stack = self.viewer.layers[1].data
-                self.img_path = file
-                self.img_name = file.stem
+        for file in Path(self.ca_file).glob('**/*.ome.tif'):
+            img = tff.imread(file, is_ome=False, is_mmstack=False)
+            self.viewer.add_image(img, name=file.stem)
+            self.img_stack = self.viewer.layers[1].data
+            self.img_path = file
+            self.img_name = file.stem
 
-                # if opening the file in a new experiment folder
-                if old_parent != file.parent:
-                    # set the parent folder
-                    old_parent = file.parent
+            # if opening the file in a new experiment folder
+            if old_parent != file.parent:
+                # set the parent folder
+                old_parent = file.parent
 
-                    # initiate the unet model
-                    img_size = self.img_stack.shape[-1]
-                    dir_path = os.path.dirname(os.path.realpath(__file__))
-                    path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                    self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                    self.unet_init = True
+                # initiate the unet model
+                img_size = self.img_stack.shape[-1]
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                self.unet_init = True
 
-                # produce the prediction and labeled layers
-                background_layer = 0
-                minsize = 100
-                self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+            # produce the prediction and labeled layers
+            background_layer = 0
+            minsize = 100
+            self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-                # to group the cells in the stimulated area vs not in the stimulated area
-                if self.label_layer:
-                    st_roi, nst_roi = self.group_st_cells(st_area_pos, 0.1)
-                    # spike_templates_file = 'spikes.json'
-                    # stimulated cells
-                    # roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
-                    # roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-                itera = False
-        #         st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
-        #         roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+            # to group the cells in the stimulated area vs not in the stimulated area
+            if self.label_layer:
+                st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
+                spike_templates_file = 'spikes.json'
+                # stimulated cells
+                roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
+                roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
+                st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
+                roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+                self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
 
-        #         # unstimulated cells
-        #         roi_signal_nst = self.calculate_ROI_intensity(nst_rois, self.img_stack)
-        #         roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-        #         nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
-        #         roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                # unstimulated cells
+                roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
+                roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
+                nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
+                roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
 
-        #         # calculate connetivity
-        #         self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-        #         self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-        #         self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
-        #         self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+                # calculate connetivity
+                self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+                self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
+                self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
+                self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+                self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
 
-        #         # save file
-        #         self.save_evoked_files()
+                # save file
+                self.save_files()
+                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
+                                       st_spike_times, roi_analysis_st, st_max_correlation,
+                                       st_max_cor_temp, st_roi, st_layer, st_label)
+                self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
+                                       nst_spike_times, roi_analysis_nst, nst_max_correlation,
+                                       nst_max_cor_temp, nst_roi, nst_layer, nst_label)
 
-        #     # clear
-        #     self.clear()
+            # clear
+            self.clear()
 
-        # self.model_unet = None
-        # self.batch_process = False
-        # self.blue_file = None
-        # self.ca_file = None
-        # self.unet_init = False
+        self.model_unet = None
+        self.batch_process = False
+        self.blue_file = None
+        self.ca_file = None
+        self.unet_init = False
+        self.st_colors = []
+        self.nst_colors = []
 
     def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
@@ -1447,25 +1465,17 @@ class Calcium(QWidget):
         for r in self.roi_dict:
             # print(f'length of r is {len(r)}')
             new_set = {tuple(value) for value in self.roi_dict[r]}
-            print("length of new_set", len(new_set))
-            # print(f'type of the first value: {type(self.roi_dict[r])}')
-            # print(f'after converting to set: {type(set(map(tuple, self.roi_dict[r])))}')
-            # overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
             overlap = len(new_set.intersection(blue_area))
             perc_overlap = overlap / len(self.roi_dict[r])
-            print(f'overlap percentage is {perc_overlap}')
 
             if perc_overlap > overlap_th:
                 st_roi[r] = self.roi_dict[r]
-        print(f'roi_dict length: {len(self.roi_dict.keys())}')
-        print(f'st_roi length: {len(st_roi.keys())}')
 
         # group those that are not in the stimulated area
         nst_roi = self.roi_dict.copy()
 
         for label in st_roi:
             del nst_roi[label]
-        print(f'nst_roi: {len(nst_roi.keys())}')
 
         # regroup the labels; shape = (img_size, img_size)
         st_label = np.zeros_like(self.labels)
@@ -1474,12 +1484,10 @@ class Calcium(QWidget):
         for r in st_roi:
             roi_coords = np.array(st_roi[r]).T.tolist()
             st_label[tuple(roi_coords)] = r
-        print(f' st_label shape: {st_label.shape}')
 
         for r in nst_roi:
             roi_coords = np.array(nst_roi[r]).T.tolist()
             nst_label[tuple(roi_coords)] = r
-        print(f'nst_label shape: {nst_label.shape}')
 
         # create label layers for each group
         st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
@@ -1515,10 +1523,11 @@ class Calcium(QWidget):
         # save_path = self.img_path[0:-4]
         # bk_im.save(save_path + '/ROIs.png')
 
-        return st_roi, nst_roi
+        return st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer
 
     def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
-                          roi_analysis, max_correlations, max_cor_templates):
+                          roi_analysis, max_correlations, max_cor_templates,
+                          roi_dict, layer, labels):
         '''
         save the analysis files for evoked activity
         '''
@@ -1528,24 +1537,36 @@ class Calcium(QWidget):
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
 
-            if st:
-                raw_signal_fname = '/raw_signal_st.csv'
-                dff_fname = '/dff_st.csv'
-                median_fname = '/medians_st.json'
-                spike_fname = '/spike_times_st.json'
-                roi_analysis_fname = '/roi_analysis_st.json'
-                num_e_fname = '/num_events_st.csv'
-                max_cor_fname = '/max_correlations_st.csv'
-                max_cor_temp_fname = '/max_cor_templates_st.csv'
-            else:
-                raw_signal_fname = '/raw_signal_nst.csv'
-                dff_fname = '/dff_nst.csv'
-                median_fname = '/medians_nst.json'
-                spike_fname = '/spike_times_nst.json'
-                roi_analysis_fname = '/roi_analysis_nst.json'
-                num_e_fname = '/num_events_nst.csv'
-                max_cor_fname = '/max_correlations_nst.csv'
-                max_cor_temp_fname = '/max_cor_templates_nst.csv'
+            raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
+            dff_fname = '/dff_st.csv' if st else '/dff_nst.csv'
+            median_fname = '/medians_st.json' if st else '/medians_nst.json'
+            spike_fname = '/spike_times_st.json' if st else '/spike_times_nst.json'
+            roi_analysis_fname = '/roi_analysis_st.json' if st else '/roi_analysis_nst.json'
+            num_e_fname = '/num_events_st.csv' if st else '/num_events_nst.csv'
+            max_cor_fname = '/max_correlations_st.csv' if st else '/max_correlations_nst.csv'
+            max_cor_temp_fname = '/max_cor_templates_st.csv' if st else '/max_cor_templates_nst.csv'
+            roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
+            roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
+            # if st:
+            #     raw_signal_fname = '/raw_signal_st.csv'
+            #     dff_fname = '/dff_st.csv'
+            #     median_fname = '/medians_st.json'
+            #     spike_fname = '/spike_times_st.json'
+            #     roi_analysis_fname = '/roi_analysis_st.json'
+            #     num_e_fname = '/num_events_st.csv'
+            #     max_cor_fname = '/max_correlations_st.csv'
+            #     max_cor_temp_fname = '/max_cor_templates_st.csv'
+            #     roi_center_fname = '/roi_centers_st.json'
+            # else:
+            #     raw_signal_fname = '/raw_signal_nst.csv'
+            #     dff_fname = '/dff_nst.csv'
+            #     median_fname = '/medians_nst.json'
+            #     spike_fname = '/spike_times_nst.json'
+            #     roi_analysis_fname = '/roi_analysis_nst.json'
+            #     num_e_fname = '/num_events_nst.csv'
+            #     max_cor_fname = '/max_correlations_nst.csv'
+            #     max_cor_temp_fname = '/max_cor_templates_nst.csv'
+            #     roi_center_fname = '/roi_centers_nst.json'
 
 
             raw_signal = np.zeros([len(roi_signal[list(roi_signal.keys())[0]]), len(roi_signal)])
@@ -1630,10 +1651,90 @@ class Calcium(QWidget):
                     writer.writerow(max_cor_temps[i, :])
 
             # save the traces of two groups
+            if st:
+                self.st_canvas_traces.print_png(save_path + 'st_traces.png')
+                self.st_canvas_just_traces.print_png(save_path + 'st_traces_no_detections.png')
+            else:
+                self.nst_canvas_traces.print_png(save_path + 'nst_traces.png')
+                self.nst_canvas_just_traces.print_png(save_path + 'nst_traces_no_detections.png')
 
             # save the labels separately
+            label_array = np.stack((layer.data,) * 4, axis=-1).astype(float)
+            for i in range(1, np.max(labels) + 1):
+                i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
+                if st:
+                    label_array[(i_coords[0], i_coords[1])] = self.st_colors[i - 1]
+                else:
+                    label_array[(i_coords[0], i_coords[1])] = self.nst_colors[i - 1]
+
+            # self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+            im = Image.fromarray((label_array*255).astype(np.uint8))
+            bk_im = Image.new(im.mode, im.size, "black")
+            bk_im.paste(im, im.split()[-1])
+            bk_im.save(save_path + roi_fname)
 
             # save the ror_centers.json file
+            roi_centers = {}
+            for roi_number, roi_coords in roi_dict.items():
+                center = np.mean(roi_coords, axis=0)
+                roi_centers[roi_number] = (int(center[0]), int(center[1]))
+
+            with open(save_path + roi_center_fname, 'w') as roi_file:
+                json.dump(roi_centers, roi_file, indent="")
 
             # save the prediction layer
+            self.prediction_layer.save(save_path + '/prediction.tif')
+
+    def evoked_traces(self, st, dff, labels, layer, spike_times):
+        '''
+        '''
+        colors = []
+        for i in range(1, np.max(labels) + 1):
+            color = layer.get_color(i)
+            color = (color[0], color[1], color[2], color[3])
+            colors.append(color)
+
+        roi_to_plot = []
+        colors_to_plot = []
+        for i, r in enumerate(spike_times):
+            if len(spike_times[r]) > 0:
+                roi_to_plot.append(r)
+                colors_to_plot.append(colors[i])
+        if st:
+            self.st_colors = colors
+        else:
+            self.nst_colors = colors
+        if len(roi_to_plot) > 0:
+            print('Active ROI:', roi_to_plot)
+            dff_max = np.zeros(len(roi_to_plot))
+            for dff_index, dff_key in enumerate(roi_to_plot):
+                dff_max[dff_index] = np.max(dff[dff_key])
+            height_increment = max(dff_max)
+
+            if st:
+                self.st_axes.set_prop_cycle(color=colors_to_plot)
+                self.st_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+
+                for height_index, d in enumerate(roi_to_plot):
+                    self.st_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
+                    self.st_axes.plot(dff[d] + height_index * (1.2 * height_increment))
+                    if len(spike_times[d]) > 0:
+                        self.st_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
+                                    ms=2, color='k', marker='o', ls='')
+                    self.st_canvas_traces.draw_idle()
+                    self.st_canvas_just_traces.draw_idle()
+            else:
+                self.nst_axes.set_prop_cycle(color=colors_to_plot)
+                self.nst_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+
+                for height_index, d in enumerate(roi_to_plot):
+                    self.nst_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
+                    self.nst_axes.plot(dff[d] + height_index * (1.2 * height_increment))
+                    if len(spike_times[d]) > 0:
+                        self.st_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
+                                    ms=2, color='k', marker='o', ls='')
+                    self.st_canvas_traces.draw_idle()
+                    self.st_canvas_just_traces.draw_idle()
+        else:
+            self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
