@@ -41,10 +41,12 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
-        w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
-        # self.viewer.window.add_dock_widget(self._evk_batch_process)
-        self.viewer.window.add_dock_widget(w1)
-        w1.clicked.connect(self._evk_batch_process)
+        # NOTE: figure out a way to avoid the error message
+        # w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
+        self.viewer.window.add_dock_widget(self._evk_batch_process)
+        self._evk_batch_process()
+        # self.viewer.window.add_dock_widget(w1)
+        # w1.clicked.connect(self._evk_batch_process)
 
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
