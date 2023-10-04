@@ -1333,25 +1333,26 @@ class Calcium(QWidget):
             self.img_name = file.stem
 
             # if opening the file in a new experiment folder
-            # if old_parent != file.parent:
-            #     # set the parent folder
-            #     old_parent = file.parent
+            if old_parent != file.parent:
+                # set the parent folder
+                old_parent = file.parent
 
-            #     # initiate the unet model
-            #     img_size = self.img_stack.shape[-1]
-            #     dir_path = os.path.dirname(os.path.realpath(__file__))
-            #     path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-            #     self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-            #     self.unet_init = True
+                # initiate the unet model
+                img_size = self.img_stack.shape[-1]
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                self.unet_init = True
 
-            # # produce the prediction and labeled layers
-            # background_layer = 0
-            # minsize = 100
-            # self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+            # produce the prediction and labeled layers
+            background_layer = 0
+            minsize = 100
+            self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-            # # to group the cells in the stimulated area vs not in the stimulated area
-            # if self.label_layer:
-            #     st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
+            print(self.roi_dict['1'])
+            # to group the cells in the stimulated area vs not in the stimulated area
+            if self.label_layer:
+                st_rois, nst_rois = self.group_st_cells(st_area_pos, 0.1)
         #         spike_templates_file = 'spikes.json'
         #         # stimulated cells
         #         roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
@@ -1415,7 +1416,6 @@ class Calcium(QWidget):
             for j in range(st_area.shape[1]):
                 if st_area[i][j] == 1:
                     st_area_pos.add((i, j)) # row, column
-        print("length of the st area set is ", len(st_area_pos))
 
         # # to visualize the epllipse
         # epllipse = cv2.fitEllipse(st_area)
@@ -1442,13 +1442,14 @@ class Calcium(QWidget):
         '''
         # find rois that is in the stimulated area
         st_roi = {}
-        print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
-        # for r in self.roi_dict:
-        #     print(len(self.roi_dict[r]))
+        print()
+        # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
+        for r in self.roi_dict:
+            print(len(self.roi_dict[r]))
             # overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
-            # overlap = len(set(self.roi_dict[r]).intersection(blue_area))
-            # perc_overlap = overlap / len(self.roi_dict[r])
-            # print(f'overlap percentage is {perc_overlap}')
+            overlap = len(set(map(tuple, self.roi_dict[r])).intersection(blue_area))
+            perc_overlap = overlap / len(self.roi_dict[r])
+            print(f'overlap percentage is {perc_overlap}')
 
             # if perc_overlap > overlap_th:
             #     st_roi[r] = self.roi_dict[r]
