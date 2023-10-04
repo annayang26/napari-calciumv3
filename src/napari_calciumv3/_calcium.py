@@ -42,7 +42,7 @@ class Calcium(QWidget):
         self.layout().addWidget(self.bp_btn)
 
         w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
-        self.viewer.window.add_dock_widget(self._evk_batch_process)
+        # self.viewer.window.add_dock_widget(self._evk_batch_process)
         self.viewer.window.add_dock_widget(w1)
         w1.clicked.connect(self._evk_batch_process)
 
@@ -1323,7 +1323,8 @@ class Calcium(QWidget):
         self.axes.cla()
         self.canvas_traces.draw_idle()
 
-    @magicgui(blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
+    @magicgui(call_button="batch process (evoked activity)",
+              blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
               ca_file={"label": "Choose the Calcium Imaging directory:", "mode": "d"})
     def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
         blue_file_path = str(blue_file)
