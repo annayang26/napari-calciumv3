@@ -1342,7 +1342,7 @@ class Calcium(QWidget):
             img = tff.imread(file, is_ome=False, is_mmstack=False)
             self.viewer.add_image(img, name=file.stem)
             self.img_stack = self.viewer.layers[1].data
-            self.img_path = file
+            self.img_path = str(file)
             self.img_name = file.stem
 
             # if opening the file in a new experiment folder
