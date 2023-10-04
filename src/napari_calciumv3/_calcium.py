@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
-from magicgui import magicgui
+from magicgui import magicgui, widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -41,8 +41,10 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
+        w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
         self.viewer.window.add_dock_widget(self._evk_batch_process)
-        self._evk_batch_process()
+        self.viewer.window.add_dock_widget(w1)
+        w1.clicked.connect(self._evk_batch_process)
 
         btn = QPushButton("Analyze")
         btn.clicked.connect(self._on_click)
@@ -576,7 +578,7 @@ class Calcium(QWidget):
             spike_times[r] = []
             spike_correlations = np.max(m, axis=1)
             max_correlations[r] = spike_correlations
-            self.max_cor_templates[r] = np.argmax(m, axis=1) + 1
+            max_cor_templates[r] = np.argmax(m, axis=1) + 1
 
             j = 0
             # iterate through frame in one label
@@ -1329,7 +1331,7 @@ class Calcium(QWidget):
         self.ca_file = str(ca_file)
 
         # assuming the same blue area for all the input ca imaging file
-        if blue_file_path is not None:
+        if len(blue_file_path) > 0:
             st_area_pos = self.process_blue(blue_file_path, 80)
         self.batch_proess = True
         old_parent = ''
