@@ -1329,6 +1329,9 @@ class Calcium(QWidget):
     def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
         blue_file_path = str(blue_file)
         self.ca_file = str(ca_file)
+
+        print(blue_file_path)
+        print(ca_file)
         st_area_pos = self.process_blue(blue_file_path, 80)
 
         self.batch_proess = True
@@ -1393,14 +1396,15 @@ class Calcium(QWidget):
 
             # clear
             self.clear()
+            self.ca_file = None
+            self.st_colors = []
+            self.nst_colors = []
 
         self.model_unet = None
         self.batch_process = False
         self.blue_file = None
-        self.ca_file = None
         self.unet_init = False
-        self.st_colors = []
-        self.nst_colors = []
+
 
     def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
