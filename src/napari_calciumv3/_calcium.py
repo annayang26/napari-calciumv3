@@ -1487,33 +1487,33 @@ class Calcium(QWidget):
 
         # NOTE: leave the code to save the roi files here for now.
         # MOVE to save method later!!!
-        label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
-        st_label_array = np.stack((st_layer.data, ) * 4, axis=-1).astype(float)
-        nst_label_array = np.stack((nst_layer.data, ) * 4, axis=-1).astype(float)
+        # label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
+        # st_label_array = np.stack((st_layer.data, ) * 4, axis=-1).astype(float)
+        # nst_label_array = np.stack((nst_layer.data, ) * 4, axis=-1).astype(float)
 
-        for i in range(1, np.max(self.labels) + 1):
-            color = self.label_layer.get_color(i)
-            color = (color[0], color[1], color[2], color[3])
-            self.colors.append(color)
+        # for i in range(1, np.max(self.labels) + 1):
+        #     color = self.label_layer.get_color(i)
+        #     color = (color[0], color[1], color[2], color[3])
+        #     self.colors.append(color)
 
-        color_num = 1
-        for i in range(1, np.max(self.labels) + 1):
-            i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
-            label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
+        # color_num = 1
+        # for i in range(1, np.max(self.labels) + 1):
+        #     i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
+        #     label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-        print(f'st_label array shape: {st_label_array.shape}')
-        print(f'st_label_array: {st_label_array}')
-        for i in range(1, st_label_array.shape[0]+1):
-            color_num += 1
-            i_coords = np.asarray(st_label_array == [i, i, i, i]).nonzeror()
-            st_label_array[(i_coords[0], i_coords[1])] = self.colors[i-1]
+        # print(f'st_label array shape: {st_label_array.shape}')
+        # print(f'st_label_array: {st_label_array}')
+        # for i in range(1, st_label_array.shape[0]+1):
+        #     color_num += 1
+        #     i_coords = np.asarray(st_label_array == [i, i, i, i]).nonzeror()
+        #     st_label_array[(i_coords[0], i_coords[1])] = self.colors[i-1]
 
-        self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-        im = Image.fromarray((label_array*255).astype(np.uint8))
-        bk_im = Image.new(im.mode, im.size, "black")
-        bk_im.paste(im, im.split()[-1])
-        save_path = self.img_path[0:-4]
-        bk_im.save(save_path + '/ROIs.png')
+        # self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+        # im = Image.fromarray((label_array*255).astype(np.uint8))
+        # bk_im = Image.new(im.mode, im.size, "black")
+        # bk_im.paste(im, im.split()[-1])
+        # save_path = self.img_path[0:-4]
+        # bk_im.save(save_path + '/ROIs.png')
 
         return st_roi, nst_roi
 
