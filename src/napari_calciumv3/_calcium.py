@@ -1689,6 +1689,7 @@ class Calcium(QWidget):
             height_increment = max(dff_max)
 
             if st:
+                print(type(self.st_axes))
                 self.st_axes.set_prop_cycle(color=colors_to_plot)
                 self.st_axes_just_traces.set_prop_cycle(color=colors_to_plot)
 
