@@ -1353,7 +1353,7 @@ class Calcium(QWidget):
 
                 # to group the cells in the stimulated area vs not in the stimulated area
                 if self.label_layer:
-                    self.group_st_cells(st_area_pos, 0.1)
+                    st_roi, nst_roi = self.group_st_cells(st_area_pos, 0.1)
                     # spike_templates_file = 'spikes.json'
                     # stimulated cells
                     # roi_signal_st = self.calculate_ROI_intensity(st_rois, self.img_stack)
@@ -1451,71 +1451,71 @@ class Calcium(QWidget):
             # print(f'type of the first value: {type(self.roi_dict[r])}')
             # print(f'after converting to set: {type(set(map(tuple, self.roi_dict[r])))}')
             # overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
-            # overlap = len(set(map(tuple, self.roi_dict[r])).intersection(blue_area))
-            # perc_overlap = overlap / len(self.roi_dict[r])
-            # print(f'overlap percentage is {perc_overlap}')
+            overlap = len(new_set.intersection(blue_area))
+            perc_overlap = overlap / len(self.roi_dict[r])
+            print(f'overlap percentage is {perc_overlap}')
 
-            # if perc_overlap > overlap_th:
-            #     st_roi[r] = self.roi_dict[r]
-        # print(f'roi_dict length: {len(self.roi_dict.keys())}')
-        # print(f'st_roi length: {len(st_roi.keys())}')
+            if perc_overlap > overlap_th:
+                st_roi[r] = self.roi_dict[r]
+        print(f'roi_dict length: {len(self.roi_dict.keys())}')
+        print(f'st_roi length: {len(st_roi.keys())}')
 
-        # # group those that are not in the stimulated area
-        # nst_roi = self.roi_dict.copy()
+        # group those that are not in the stimulated area
+        nst_roi = self.roi_dict.copy()
 
-        # for label in st_roi:
-        #     del nst_roi[label]
-        # print(f'nst_roi: {len(nst_roi.keys())}')
+        for label in st_roi:
+            del nst_roi[label]
+        print(f'nst_roi: {len(nst_roi.keys())}')
 
-        # # regroup the labels; shape = (img_size, img_size)
-        # st_label = np.zeros_like(self.labels)
-        # nst_label = np.zeros_like(self.labels)
+        # regroup the labels; shape = (img_size, img_size)
+        st_label = np.zeros_like(self.labels)
+        nst_label = np.zeros_like(self.labels)
 
-        # for r in st_roi:
-        #     roi_coords = np.array(st_roi[r]).T.tolist()
-        #     st_label[tuple(roi_coords)] = r
-        # print(f' st_label shape: {st_label.shape}')
+        for r in st_roi:
+            roi_coords = np.array(st_roi[r]).T.tolist()
+            st_label[tuple(roi_coords)] = r
+        print(f' st_label shape: {st_label.shape}')
 
-        # for r in nst_roi:
-        #     roi_coords = np.array(nst_roi[r]).T.tolist()
-        #     nst_label[tuple(roi_coords)] = r
-        # print(f'nst_label shape: {nst_label.shape}')
+        for r in nst_roi:
+            roi_coords = np.array(nst_roi[r]).T.tolist()
+            nst_label[tuple(roi_coords)] = r
+        print(f'nst_label shape: {nst_label.shape}')
 
-        # # create label layers for each group
-        # st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
-        # nst_layer = self.viewer.add_labels(nst_label, name='Not stimulated cells', opacity=1)
+        # create label layers for each group
+        st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
+        nst_layer = self.viewer.add_labels(nst_label, name='Not stimulated cells', opacity=1)
 
-        # # NOTE: leave the code to save the roi files here for now.
-        # # MOVE to save method later!!!
-        # label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
-        # st_label_array = np.stack((st_layer.data, ) * 4, axis=-1).astype(float)
-        # nst_label_array = np.stack((nst_layer.data, ) * 4, axis=-1).astype(float)
+        # NOTE: leave the code to save the roi files here for now.
+        # MOVE to save method later!!!
+        label_array = np.stack((self.label_layer.data,) * 4, axis=-1).astype(float)
+        st_label_array = np.stack((st_layer.data, ) * 4, axis=-1).astype(float)
+        nst_label_array = np.stack((nst_layer.data, ) * 4, axis=-1).astype(float)
 
-        # for i in range(1, np.max(self.labels) + 1):
-        #     color = self.label_layer.get_color(i)
-        #     color = (color[0], color[1], color[2], color[3])
-        #     self.colors.append(color)
+        for i in range(1, np.max(self.labels) + 1):
+            color = self.label_layer.get_color(i)
+            color = (color[0], color[1], color[2], color[3])
+            self.colors.append(color)
 
-        # color_num = 1
-        # for i in range(1, np.max(self.labels) + 1):
-        #     i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
-        #     label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
+        color_num = 1
+        for i in range(1, np.max(self.labels) + 1):
+            i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
+            label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-        # print(f'st_label array shape: {st_label_array.shape}')
-        # print(f'st_label_array: {st_label_array}')
-        # for i in range(1, st_label_array.shape[0]+1):
-        #     color_num += 1
-        #     i_coords = np.asarray(st_label_array == [i, i, i, i]).nonzeror()
-        #     st_label_array[(i_coords[0], i_coords[1])] = self.colors[i-1]
+        print(f'st_label array shape: {st_label_array.shape}')
+        print(f'st_label_array: {st_label_array}')
+        for i in range(1, st_label_array.shape[0]+1):
+            color_num += 1
+            i_coords = np.asarray(st_label_array == [i, i, i, i]).nonzeror()
+            st_label_array[(i_coords[0], i_coords[1])] = self.colors[i-1]
 
-        # self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-        # im = Image.fromarray((label_array*255).astype(np.uint8))
-        # bk_im = Image.new(im.mode, im.size, "black")
-        # bk_im.paste(im, im.split()[-1])
-        # save_path = self.img_path[0:-4]
-        # bk_im.save(save_path + '/ROIs.png')
+        self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+        im = Image.fromarray((label_array*255).astype(np.uint8))
+        bk_im = Image.new(im.mode, im.size, "black")
+        bk_im.paste(im, im.split()[-1])
+        save_path = self.img_path[0:-4]
+        bk_im.save(save_path + '/ROIs.png')
 
-        # return st_roi, nst_roi
+        return st_roi, nst_roi
 
     def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
                           roi_analysis, max_correlations, max_cor_templates):
