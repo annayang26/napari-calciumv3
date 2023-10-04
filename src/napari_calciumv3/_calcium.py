@@ -1324,8 +1324,6 @@ class Calcium(QWidget):
 
         # assuming the same blue area for all the input ca imaging file
         st_area_pos = self.process_blue(blue_file_path, 80)
-
-        print(f'length of st_pos: {len(st_area_pos)}, type: {type(st_area_pos)}')
         old_parent = ''
         itera = True
         while itera:
@@ -1352,7 +1350,6 @@ class Calcium(QWidget):
                 background_layer = 0
                 minsize = 100
                 self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
-                print(type(self.roi_dict))
 
                 # to group the cells in the stimulated area vs not in the stimulated area
                 # if self.label_layer:
@@ -1449,8 +1446,8 @@ class Calcium(QWidget):
         # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
         for r in self.roi_dict:
             # print(f'length of r is {len(r)}')
-            print(r)
-            # print("length of roi_dict 1st item", len(self.roi_dict[r]))
+            new_set = {tuple(value) for value in self.roi_dict[r]}
+            print("length of new_set", len(new_set))
             # print(f'type of the first value: {type(self.roi_dict[r])}')
             # print(f'after converting to set: {type(set(map(tuple, self.roi_dict[r])))}')
             # overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
