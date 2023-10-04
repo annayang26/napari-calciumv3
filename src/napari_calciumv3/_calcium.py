@@ -135,9 +135,9 @@ class Calcium(QWidget):
 
                         self._on_click()
                         self.save_files()
-                        self.clear()
                     except IndexError:
                         pass
+                    self.clear()
 
             print(f'{folder_path} is done batch processing')
 
