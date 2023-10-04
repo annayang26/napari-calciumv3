@@ -97,6 +97,7 @@ class Calcium(QWidget):
         self.nst_colors = []
         self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
         self.st_axes = self.st_canvas_traces.figure.subplots()
+        print(f'making st_axes figure: {type(self.st_axes)}')
         self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
         self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
         self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
