@@ -40,7 +40,7 @@ class Calcium(QWidget):
         self.bp_btn = QPushButton("Batch Process (spontaneous)")
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
-        
+
         self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
         self.st_axes = self.st_canvas_traces.figure.subplots()
         print(f'making st_axes figure: {type(self.st_axes)}')
