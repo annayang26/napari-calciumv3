@@ -2,12 +2,15 @@ import csv
 import importlib.resources
 import json
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import cv2
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
+from magicgui import magicgui, widgets
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -19,7 +22,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 from scipy import ndimage as ndi
-from skimage import feature, filters, morphology, segmentation
+from skimage import feature, filters, io, morphology, segmentation
 
 if TYPE_CHECKING:
     import napari
@@ -34,7 +37,7 @@ class Calcium(QWidget):
         self.viewer = napari_viewer
         self.setLayout(QVBoxLayout())
 
-        self.bp_btn = QPushButton("Select a Folder")
+        self.bp_btn = QPushButton("Batch Process (spontaneous)")
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
@@ -57,7 +60,6 @@ class Calcium(QWidget):
         self.clear_btn.clicked.connect(self.clear)
         self.layout().addWidget(self.clear_btn)
 
-        self.batch_process = False
         self.img_stack = None
         self.img_name = None
         self.labels = None
@@ -78,6 +80,13 @@ class Calcium(QWidget):
         self.img_path = None
         self.colors = []
 
+        # batch process
+        self.batch_process = False
+        self.unet_init = False
+        # batch process (evoked)
+        self.blue_file = None
+        self.ca_file = None
+
     def _select_folder(self) -> None:
         '''
         allow user to select a folder to analyze all the tif file in the folder
@@ -96,37 +105,47 @@ class Calcium(QWidget):
         self.batch_process = True
 
         # traverse through all the ome.tif files in the selected folder
-        for file_name in os.listdir(folder_names[0]):
+        for (folder_path, _, folder_list) in os.walk(folder_names[0]):
+            # for file_name in Path.iterdir(folder):
+            print("dir_path: ", folder_path)
+            for file_name in os.listdir(folder_path):
 
-            save_path = file_name[0:-4]
-            # check if the file has already been analyzed
-            if os.path.isdir(save_path):
-                print(f"save_path is {save_path}")
-                continue
+                if file_name.endswith(".ome.tif"):
+                    file_path = os.path.join(folder_path, file_name)
+                    print("file_path: ", file_path)
+                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.viewer.add_image(img, name=file_name)
 
-            if file_name.endswith(".ome.tif"):
-                file_path = os.path.join(folder_names[0], file_name)
+                    self.img_stack = self.viewer.layers[0].data
+                    self.img_path = file_path
+                    self.img_name = file_name
 
-                img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    # only initiate the trained model once
+                    if not self.unet_init:
+                        img_size = self.img_stack.shape[-1]
+                        dir_path = os.path.dirname(os.path.realpath(__file__))
+                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                        self.unet_init = True
 
-                self.viewer.add_image(img,
-                                      name=file_name)
+                    print("self img stack: ", self.img_stack.shape)
+                    print("self img path ", self.img_path)
+                    print("self img name: ", self.img_name)
 
-                self.img_stack = self.viewer.layers[0].data
-                self.img_path = file_path
-                self.img_name = file_name
+                    self._on_click()
+                    self.save_files()
+                    self.clear()
 
-                print("self img stack: ", self.img_stack.shape)
-                print("self img path ", self.img_path)
-                print("self img name: ", self.img_name)
+            print(f'{folder_path} is done batch processing')
 
-                self._on_click()
-                self.save_files()
-                self.clear()
+            if self.model_unet:
+                self._compile_data(folder_path)
+            # reset the model
+            self.model_unet = None
+            self.unet_init = False
 
-        print(f'{folder_names[0]} is done batch processing')
-
-        self._compile_data(folder_names[0])
+        print('Batch Processing (spontaneous activity) Done')
+        self.batch_process = False
 
     def _compile_data(self, base_folder,
                       file_name="summary.txt", variable=None):
@@ -227,30 +246,25 @@ class Calcium(QWidget):
             self.img_name = self.viewer.layers[0].name
             self.img_path = self.viewer.layers[0].source.path
 
-        # print("img_size[0] is ", self.img_stack.shape[0])
-        # print("img_size[1] is ", self.img_stack.shape[1])
-        # print("img_size[-1] is ", self.img_stack.shape[-1])
-        img_size = self.img_stack.shape[-1]
+            img_size = self.img_stack.shape[-1]
+            dir_path = os.path.dirname(os.path.realpath(__file__))
+            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
 
-        dir_path = os.path.dirname(os.path.realpath(__file__))
-        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-
-        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
         background_layer = 0
         minsize = 100
         self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
         if self.label_layer:
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-            self.roi_dff = self.calculateDFF(self.roi_signal)
+            self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
 
             spike_templates_file = 'spikes.json'
-            self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.80)
+            self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.80)
             self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
-            # print('ROI average prediction:', self.get_ROI_prediction(self.roi_dict, self.prediction_layer.data))
 
     def segment(self, img_stack, minsize, background_label):
         '''
@@ -311,8 +325,8 @@ class Calcium(QWidget):
 
         Returns:
         -------------
-        roi_dict: dict. a dictionary of label-position pairs
-        labels: ndarray. shape=() updated labels without the small ROIs
+        roi_dict: dict. a dictionary of label-position (a list of lists) pairs
+        labels: ndarray. shape=(img_size, img_size) updated labels without the small ROIs
         '''
         # sort the labels and filter the unique ones
         u_labels = np.unique(labels)
@@ -381,27 +395,7 @@ class Calcium(QWidget):
                 small_roi.append(r)
         return area, small_roi
 
-    #TODO: fill out the documentation
-    def get_ROI_prediction(self, roi_dict, prediction):
-        '''
-        get the average prediction of the s
-
-        Parameters:
-        --------------
-        roi_dict:
-        prediction:
-
-        Returns:
-        --------------
-        avg_pred:
-        '''
-        avg_pred = {}
-        for r in roi_dict:
-            roi_coords = np.array(roi_dict[r]).T.tolist()
-            avg_pred[r] = np.mean(prediction[tuple(roi_coords)])
-        return avg_pred
-
-    def calculate_ROI_intensity(self, roi_dict, img_stack):
+    def calculate_ROI_intensity(self, roi_dict: dict, img_stack) -> dict:
         '''
         calculate the average intensity of each roi
 
@@ -412,7 +406,7 @@ class Calcium(QWidget):
 
         returns:
         ---------------
-        f: dict. the label (int)-intensity (a list of averaged intensity across 
+        f: dict. the label (int)-intensity (a list of averaged intensity across
             all the pixels with the same label at each frame) pair segmemted
         '''
         f = {}
@@ -436,17 +430,19 @@ class Calcium(QWidget):
         returns:
         --------------
         dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
+        median: dict. a dictionary of label(int)-median signal pair
+        bg: dict. a dictionary of label(int)- bg pixel value pair
 
         '''
         dff = {}
-        self.median = {}
-        self.bg = {}
+        median = {}
+        bg = {}
         for n in roi_signal:
-            background, self.median[n] = self.calculate_background(roi_signal[n], 200)
-            self.bg[n] = background.tolist()
+            background, median[n] = self.calculate_background(roi_signal[n], 200)
+            bg[n] = background.tolist()
             dff[n] = (roi_signal[n] - background) / background
             dff[n] = dff[n] - np.min(dff[n])
-        return dff
+        return dff, median, bg
 
     def calculate_background(self, f, window):
         '''
@@ -476,7 +472,6 @@ class Calcium(QWidget):
             median.append(np.median(f[x:y]))
         return background, median
 
-    #TODO: finish the documentation here
     def plot_values(self, dff, labels, layer, spike_times) -> None:
         '''
         generate plots for dff, labeled_ROI, layers, and spike times
@@ -484,9 +479,9 @@ class Calcium(QWidget):
         parameters:
         --------------
         dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
-        labels:
-        layer:
-        spike_times:
+        labels: ndarray. a labeled matrix of segmentations of the same type as markers
+        layer: ndarray. the label/segmentation layer image
+        spike_times: dict. a dictionary of label-position pairs
 
         returns:
         --------------
@@ -547,8 +542,8 @@ class Calcium(QWidget):
         f = importlib.resources.open_text(__package__, template_file)
         spike_templates = json.load(f)
         spike_times = {}
-        self.max_correlations = {}
-        self.max_cor_templates = {}
+        max_correlations = {}
+        max_cor_templates = {}
         max_temp_len = max([len(temp) for temp in spike_templates.values()])
 
         # calculate the corelation between the dff of one label at each frame
@@ -567,8 +562,8 @@ class Calcium(QWidget):
 
             spike_times[r] = []
             spike_correlations = np.max(m, axis=1)
-            self.max_correlations[r] = spike_correlations
-            self.max_cor_templates[r] = np.argmax(m, axis=1) + 1
+            max_correlations[r] = spike_correlations
+            max_cor_templates[r] = np.argmax(m, axis=1) + 1
 
             j = 0
             # iterate through frame in one label
@@ -609,7 +604,7 @@ class Calcium(QWidget):
                             spike_times[r][k + 1] = None
                 spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
 
-        return spike_times
+        return spike_times, max_correlations, max_cor_templates
 
     def analyze_ROI(self, roi_dff: dict, spk_times: dict):
         '''
@@ -713,7 +708,6 @@ class Calcium(QWidget):
                                     if dff_deriv[start_index] < 0:
                                         negative_count += 1
 
-                                    # TODO: maybe don't need this else statement?
                                     else:
                                         negative_count = 0
 
@@ -727,8 +721,7 @@ class Calcium(QWidget):
                             else:
                                 under_thresh_count = 0
 
-                            # stop searching for starting index 
-                            # NOTE: changed the operator from == to >=
+                            # stop searching for starting index
                             if under_thresh_count >= reset_num or start_index == 0 or total_count == total_dist:
                                 searching = False
 
@@ -768,13 +761,15 @@ class Calcium(QWidget):
                     # print(f'ROI {r} spike {i} - start_index: {start_index}, end_index: {end_index}')
 
                     # Save data
-                    # NOTE: why separate the spikes from the spike? 
                     spk_to_end = roi_dff[r][spk_times[r][i]:(end_index + 1)]
                     start_to_spk = roi_dff[r][start_index:(spk_times[r][i] + 1)]
-                    amplitude_info[r]['amplitudes'].append(np.max(spk_to_end) - np.min(start_to_spk)) 
-                    amplitude_info[r]['peak_indices'].append(int(spk_times[r][i] + np.argmax(spk_to_end)))
-                    amplitude_info[r]['base_indices'].append(int(spk_times[r][i] -
-                                                                 (len(start_to_spk) - (np.argmin(start_to_spk) + 1))))
+                    try:
+                        amplitude_info[r]['amplitudes'].append(np.max(spk_to_end) - np.min(start_to_spk))
+                        amplitude_info[r]['peak_indices'].append(int(spk_times[r][i] + np.argmax(spk_to_end)))
+                        amplitude_info[r]['base_indices'].append(int(spk_times[r][i] -
+                                                                    (len(start_to_spk) - (np.argmin(start_to_spk) + 1))))
+                    except ValueError:
+                        pass
 
         # for r in amplitude_info:
         #     print('ROI', r)
@@ -1083,18 +1078,14 @@ class Calcium(QWidget):
             # third column: frequency (num events/frames or exposure )
             num_events = np.zeros((len(self.spike_times.keys()), 3))
             active_roi = 0
+            frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
             for i, r in enumerate(self.spike_times):
                 num_e = len(self.spike_times[r])
                 if num_e > 0:
                     active_roi += 1
                 num_events[i, 0] = i
                 num_events[i, 1] = num_e
-                if self.framerate:
-                    frame_info = self.framerate
-                    num_events[i, 2] = num_e / (self.img_stack.shape[0]/self.framerate)
-                else:
-                    frame_info = len(self.img_stack)
-                    num_events[i, 2] = num_e / frame_info
+                num_events[i, 2] = num_e / frame_info
 
             with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
@@ -1140,13 +1131,11 @@ class Calcium(QWidget):
                 i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-            # NOTE: save as tif file for now. Couldn't save the image using Kellen's code
             self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
             bk_im.save(save_path + '/ROIs.png')
-            # self.label_layer.print_png(save_path + '/ROIs.png')
 
             # the centers of each ROI
             roi_centers = {}
@@ -1294,11 +1283,13 @@ class Calcium(QWidget):
             self.viewer.layers.pop(i)
             i -= 1
 
+        if not self.batch_process:
+            self.model_unet = None
+
         self.img_stack = None
         self.img_name = None
         self.labels = None
         self.label_layer = None
-        self.model_unet = None
         self.prediction_layer = None
         self.roi_dict = None
         self.roi_signal = None
