@@ -1443,11 +1443,13 @@ class Calcium(QWidget):
         st_roi = {}
         # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
         for r in self.roi_dict:
-            print(len(self.roi_dict[r]))
+            print("length of roi_dict 1st item", len(self.roi_dict[r]))
+            print(f'type of the first value: {type(self.roi_dict[r])}')
+            print(f'after converting to set: {type(set(map(tuple, self.roi_dict[r])))}')
             # overlap = len(set(self.roi_dict[r]).intersection(set(map(tuple, blue_area))))
-            overlap = len(set(map(tuple, self.roi_dict[r])).intersection(blue_area))
-            perc_overlap = overlap / len(self.roi_dict[r])
-            print(f'overlap percentage is {perc_overlap}')
+            # overlap = len(set(map(tuple, self.roi_dict[r])).intersection(blue_area))
+            # perc_overlap = overlap / len(self.roi_dict[r])
+            # print(f'overlap percentage is {perc_overlap}')
 
             # if perc_overlap > overlap_th:
             #     st_roi[r] = self.roi_dict[r]
