@@ -40,6 +40,16 @@ class Calcium(QWidget):
         self.bp_btn = QPushButton("Batch Process (spontaneous)")
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
+        
+        self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.st_axes = self.st_canvas_traces.figure.subplots()
+        print(f'making st_axes figure: {type(self.st_axes)}')
+        self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
+        self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.nst_axes = self.nst_canvas_traces.figure.subplots()
+        self.nst_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
+        self.nst_axes_just_traces = self.nst_canvas_just_traces.figure.subplots()
 
         # NOTE: figure out a way to avoid the error message
         # w1 = widgets.PushButton(value=True, text='batch process (evoked activity)')
