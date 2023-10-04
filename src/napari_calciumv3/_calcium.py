@@ -1323,16 +1323,13 @@ class Calcium(QWidget):
         self.axes.cla()
         self.canvas_traces.draw_idle()
 
-    @magicgui(call_button="batch process (evoked activity)",
-              blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
+    @magicgui(blue_file={"label": "Choose the stimulated area file:", "mode": "r"},
               ca_file={"label": "Choose the Calcium Imaging directory:", "mode": "d"})
     def _evk_batch_process(self, blue_file: Path, ca_file: Path) -> None:
         blue_file_path = str(blue_file)
         self.ca_file = str(ca_file)
+        st_area_pos = self.process_blue(blue_file_path, 80)
 
-        # assuming the same blue area for all the input ca imaging file
-        if len(blue_file_path) > 0:
-            st_area_pos = self.process_blue(blue_file_path, 80)
         self.batch_proess = True
         old_parent = ''
         for file in Path(self.ca_file).glob('**/*.ome.tif'):
