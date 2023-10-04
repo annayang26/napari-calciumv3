@@ -1401,6 +1401,8 @@ class Calcium(QWidget):
             self.ca_file = None
             self.st_colors = []
             self.nst_colors = []
+            self.st_axes.cla()
+            self.nst_axes.cla()
 
         self.model_unet = None
         self.batch_process = False
@@ -1678,6 +1680,7 @@ class Calcium(QWidget):
             self.st_colors = colors
         else:
             self.nst_colors = colors
+
         if len(roi_to_plot) > 0:
             print('Active ROI:', roi_to_plot)
             dff_max = np.zeros(len(roi_to_plot))
