@@ -1443,7 +1443,7 @@ class Calcium(QWidget):
         st_roi = {}
         # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
         for r in self.roi_dict:
-            print(f'length of r is {len(r)}')
+            # print(f'length of r is {len(r)}')
             print(r)
             # print("length of roi_dict 1st item", len(self.roi_dict[r]))
             # print(f'type of the first value: {type(self.roi_dict[r])}')
