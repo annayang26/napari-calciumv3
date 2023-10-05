@@ -10,7 +10,6 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
-from magicgui import magicgui
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -1296,7 +1295,8 @@ class Calcium(QWidget):
         None
         '''
         i = len(self.viewer.layers) - 1
-        while i >= 0:
+        num_layer = 0 if self.blue_file is None else 1
+        while i >= num_layer:
             self.viewer.layers.pop(i)
             i -= 1
 
@@ -1389,6 +1389,9 @@ class Calcium(QWidget):
                                        nst_spike_times, roi_analysis_nst, nst_max_correlation,
                                        nst_max_cor_temp, nst_roi, nst_layer, nst_label)
 
+                # generate summary file
+
+
             # clear
             self.clear()
             self.ca_file = None
@@ -1402,8 +1405,9 @@ class Calcium(QWidget):
         self.blue_file = None
         self.unet_init = False
 
-    def _evk_select(self):
+    def _evk_select(self) -> None:
         '''
+        the GUI method for users to select files and then call the batch process
         '''
         dialog = EvokedInputDialog(self)
         dialog.exec_()
@@ -1411,7 +1415,6 @@ class Calcium(QWidget):
         if dialog.select:
             blue_file = dialog.blue_fpath
             ca_file = dialog.ca_fpath
-            print(ca_file)
             self._evk_batch_process(blue_file, ca_file)
         else:
             print("Please select the blue light file and the files to be batch processed")
@@ -1502,7 +1505,7 @@ class Calcium(QWidget):
 
     def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
                           roi_analysis, max_correlations, max_cor_templates,
-                          roi_dict, layer, labels):
+                          roi_dict, layer, labels) -> None:
         '''
         save the analysis files for evoked activity
         '''
@@ -1660,7 +1663,7 @@ class Calcium(QWidget):
             # save the prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
 
-    def evoked_traces(self, st, dff, labels, layer, spike_times):
+    def evoked_traces(self, st, dff, labels, layer, spike_times) -> None:
         '''
         '''
         colors = []
@@ -1688,7 +1691,6 @@ class Calcium(QWidget):
             height_increment = max(dff_max)
 
             if st:
-                print(self.st_canvas_traces)
                 st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
                 st_axes = st_canvas_traces.figure.subplots()
                 st_axes.set_prop_cycle(color=colors_to_plot)
