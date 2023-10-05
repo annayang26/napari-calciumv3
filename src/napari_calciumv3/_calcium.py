@@ -1376,7 +1376,9 @@ class Calcium(QWidget):
 
                 # calculate connetivity
                 self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+                print(f'type of self roi signal is: {type(self.roi_signal)}')
                 self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
+                print(f'type of self.roi dff is {type(self.roi_dff)}, type of self median: {type(self.median)}, type of self.bg is {self.bg}')
                 self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
                 self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                 self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
