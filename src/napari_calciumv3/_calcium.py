@@ -211,7 +211,7 @@ class Calcium(QWidget):
                         values = items[1].strip().split(" ")
                         num = values[0].strip("%")
 
-                        if values[0] == "N/A":
+                        if values[0] == "N/A" or values[0] == "No":
                             num = 0
                         data[var] = float(num)
 
