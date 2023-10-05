@@ -575,7 +575,6 @@ class Calcium(QWidget):
                                     spike_templates[spk_temp])
                     m[i, spike_template_index] = p[0, 1]
 
-
             spike_times[r] = []
             spike_correlations = np.max(m, axis=1)
             max_correlations[r] = spike_correlations
@@ -938,6 +937,8 @@ class Calcium(QWidget):
             a matrix of synchronization index between each peak of the ROIs
         '''
         # a list of ROI labels when it has spikes through out the frames
+        # NOTE: to test
+        print(f'type of spike times: {type(spk_times)}')
         active_roi = [r for r in spk_times if len(spk_times[r]) > 0]
 
         if len(active_roi) > 0:
