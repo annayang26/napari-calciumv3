@@ -618,7 +618,7 @@ class Calcium(QWidget):
                         (spike_times[r][k + 1] - spike_times[r][k]) <= 10:
                             spike_times[r][k + 1] = None
                 spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
-
+        print(f'type of spike time: {type(spike_times)}')
         return spike_times, max_correlations, max_cor_templates
 
     def analyze_ROI(self, roi_dff: dict, spk_times: dict):
@@ -937,8 +937,6 @@ class Calcium(QWidget):
             a matrix of synchronization index between each peak of the ROIs
         '''
         # a list of ROI labels when it has spikes through out the frames
-        # NOTE: to test
-        print(f'type of spike times: {type(spk_times)}')
         active_roi = [r for r in spk_times if len(spk_times[r]) > 0]
 
         if len(active_roi) > 0:
@@ -1376,9 +1374,7 @@ class Calcium(QWidget):
 
                 # calculate connetivity
                 self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-                print(f'type of self roi signal is: {type(self.roi_signal)}')
                 self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                print(f'type of self.roi dff is {type(self.roi_dff)}, type of self median: {type(self.median)}, type of self.bg is {self.bg}')
                 self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
                 self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                 self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
