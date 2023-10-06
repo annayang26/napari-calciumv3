@@ -1408,6 +1408,7 @@ class Calcium(QWidget):
         self.blue_file = None
         self.ca_file = None
         self.unet_init = False
+        self.viewer.layers.pop(0)
 
     def _evk_select(self) -> None:
         '''
@@ -1695,10 +1696,10 @@ class Calcium(QWidget):
                     self.nst_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                     self.nst_axes.plot(dff[d] + height_index * (1.2 * height_increment))
                     if len(spike_times[d]) > 0:
-                        self.st_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
+                        self.nst_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
                                     ms=2, color='k', marker='o', ls='')
-                    self.st_canvas_traces.draw_idle()
-                    self.st_canvas_just_traces.draw_idle()
+                    self.nst_canvas_traces.draw_idle()
+                    self.nst_canvas_just_traces.draw_idle()
         else:
             print(f'{self.img_path} has no calcium events were detected for any ROI')
 
