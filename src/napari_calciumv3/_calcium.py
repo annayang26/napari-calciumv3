@@ -1372,9 +1372,6 @@ class Calcium(QWidget):
                 st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
                 roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
                 self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
-                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                       st_spike_times, roi_analysis_st, st_max_correlation,
-                                       st_max_cor_temp, st_roi, st_layer, st_label)
 
                 # unstimulated cells
                 roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
@@ -1382,9 +1379,6 @@ class Calcium(QWidget):
                 nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
                 roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
                 self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
-                self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
-                                       nst_spike_times, roi_analysis_nst, nst_max_correlation,
-                                       nst_max_cor_temp, nst_roi, nst_layer, nst_label)
 
                 # calculate connetivity
                 self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
@@ -1393,7 +1387,14 @@ class Calcium(QWidget):
                 self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
                 self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                 self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
+
                 self.save_files()
+                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
+                                       st_spike_times, roi_analysis_st, st_max_correlation,
+                                       st_max_cor_temp, st_roi, st_layer, st_label)
+                self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
+                                       nst_spike_times, roi_analysis_nst, nst_max_correlation,
+                                       nst_max_cor_temp, nst_roi, nst_layer, nst_label)
 
             # clear
             self.clear()
@@ -1401,9 +1402,7 @@ class Calcium(QWidget):
             self.nst_colors = []
             self.st_axes.cla()
             self.nst_axes.cla()
-            print(f'self model unet is still there {self.model_unet is not None}')
 
-        print("outside of the folder loop")
         self.model_unet = None
         self.batch_process = False
         self.blue_file = None
@@ -1515,10 +1514,8 @@ class Calcium(QWidget):
         '''
         if self.roi_dict:
             save_path = self.img_path[0:-8]
-            print("save path before joining: ", save_path)
             group_name = 'stimulated' if st else 'non_stimulated'
             save_path = os.path.join(save_path, group_name)
-            print(save_path)
 
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
