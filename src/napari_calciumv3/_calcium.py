@@ -1531,27 +1531,6 @@ class Calcium(QWidget):
             roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
             summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
-            # if st:
-            #     raw_signal_fname = '/raw_signal_st.csv'
-            #     dff_fname = '/dff_st.csv'
-            #     median_fname = '/medians_st.json'
-            #     spike_fname = '/spike_times_st.json'
-            #     roi_analysis_fname = '/roi_analysis_st.json'
-            #     num_e_fname = '/num_events_st.csv'
-            #     max_cor_fname = '/max_correlations_st.csv'
-            #     max_cor_temp_fname = '/max_cor_templates_st.csv'
-            #     roi_center_fname = '/roi_centers_st.json'
-            # else:
-            #     raw_signal_fname = '/raw_signal_nst.csv'
-            #     dff_fname = '/dff_nst.csv'
-            #     median_fname = '/medians_nst.json'
-            #     spike_fname = '/spike_times_nst.json'
-            #     roi_analysis_fname = '/roi_analysis_nst.json'
-            #     num_e_fname = '/num_events_nst.csv'
-            #     max_cor_fname = '/max_correlations_nst.csv'
-            #     max_cor_temp_fname = '/max_cor_templates_nst.csv'
-            #     roi_center_fname = '/roi_centers_nst.json'
-
 
             raw_signal = np.zeros([len(roi_signal[list(roi_signal.keys())[0]]), len(roi_signal)])
             for i, r in enumerate(roi_signal):
@@ -1569,7 +1548,7 @@ class Calcium(QWidget):
 
             with open(save_path + dff_fname, 'w', newline='') as dff_file:
                 writer = csv.writer(dff_file)
-                writer.writerow(self.roi_dff.keys())
+                writer.writerow(roi_dff.keys())
                 for i in range(dff_signal.shape[0]):
                     writer.writerow(dff_signal[i, :])
 
@@ -1601,10 +1580,6 @@ class Calcium(QWidget):
                 writer = csv.writer(num_event_file, dialect="excel")
                 fields = ['ROI', 'Num_events', 'Frequency (num of events/s)'] if self.framerate\
                       else ['ROI', 'Num_events', 'Frequency (num of events/frame)']
-                # if self.framerate:
-                #     fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
-                # else:
-                #     fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
                 writer.writerow(fields)
                 writer.writerows(num_events)
                 sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
@@ -1666,8 +1641,8 @@ class Calcium(QWidget):
             with open(save_path + roi_center_fname, 'w') as roi_file:
                 json.dump(roi_centers, roi_file, indent="")
 
-            # save the prediction layer
-            self.prediction_layer.save(save_path + '/prediction.tif')
+            # # save the prediction layer
+            # self.prediction_layer.save(save_path + '/prediction.tif')
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
 
