@@ -1306,8 +1306,10 @@ class Calcium(QWidget):
         i = len(self.viewer.layers)-1
         num_layer = -1 if self.blue_file is None else 0
         while i > num_layer:
+            print(f'i is {i}')
             self.viewer.layers.pop(i)
             i -= 1
+        print(f'num of layers after clear: {len(self.viewer.layers)}')
 
         if not self.batch_process:
             self.model_unet = None
@@ -1474,7 +1476,6 @@ class Calcium(QWidget):
         '''
         # find rois that is in the stimulated area
         st_roi = {}
-        # print(f'blue area type: {type(blue_area)}\nblue area shape: {len(blue_area)}')
         for r in self.roi_dict:
             # print(f'length of r is {len(r)}')
             new_set = {tuple(value) for value in self.roi_dict[r]}
