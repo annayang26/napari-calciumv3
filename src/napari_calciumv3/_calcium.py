@@ -1517,6 +1517,7 @@ class Calcium(QWidget):
             save_path = self.img_path[0:-8]
             group_name = '/stimulated' if st else '/non_stimulated'
             save_path = os.path.join(save_path, group_name)
+            print(save_path)
 
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
