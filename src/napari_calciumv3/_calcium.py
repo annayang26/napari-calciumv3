@@ -1042,7 +1042,7 @@ class Calcium(QWidget):
         None.
         '''
         if self.roi_dict:
-            save_path = self.img_path[0:-4]
+            save_path = self.img_path[0:-8]
 
             # create the folder
             if not os.path.isdir(save_path):
@@ -1169,7 +1169,7 @@ class Calcium(QWidget):
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
 
-            self.generate_summary(save_path, self.roi_analysis, self.spike_times, 'summary.txt', self.roi_dict, False)
+            self.generate_summary(save_path, self.roi_analysis, self.spike_times, '/summary.txt', self.roi_dict, False)
 
         else:
             if self.batch_process:
@@ -1514,7 +1514,7 @@ class Calcium(QWidget):
         save the analysis files for evoked activity
         '''
         if self.roi_dict:
-            save_path = self.img_path[0:-4]
+            save_path = self.img_path[0:-8]
             save_path += '/stimulated' if st else '/non_stimulated'
 
             if not os.path.isdir(save_path):
@@ -1611,11 +1611,11 @@ class Calcium(QWidget):
 
             # save the traces of two groups
             if st:
-                self.st_canvas_traces.print_png(save_path + 'st_traces.png')
-                self.st_canvas_just_traces.print_png(save_path + 'st_traces_no_detections.png')
+                self.st_canvas_traces.print_png(save_path + '/st_traces.png')
+                self.st_canvas_just_traces.print_png(save_path + '/st_traces_no_detections.png')
             else:
-                self.nst_canvas_traces.print_png(save_path + 'nst_traces.png')
-                self.nst_canvas_just_traces.print_png(save_path + 'nst_traces_no_detections.png')
+                self.nst_canvas_traces.print_png(save_path + '/nst_traces.png')
+                self.nst_canvas_just_traces.print_png(save_path + '/nst_traces_no_detections.png')
 
             # save the labels separately
             label_array = np.stack((layer.data,) * 4, axis=-1).astype(float)
