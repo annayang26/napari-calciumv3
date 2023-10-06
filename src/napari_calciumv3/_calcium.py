@@ -1516,7 +1516,7 @@ class Calcium(QWidget):
         if self.roi_dict:
             save_path = self.img_path[0:-8]
             print("save path before joining: ", save_path)
-            group_name = '/stimulated' if st else '/non_stimulated'
+            group_name = 'stimulated' if st else 'non_stimulated'
             save_path = os.path.join(save_path, group_name)
             print(save_path)
 
