@@ -2,7 +2,6 @@ import csv
 import importlib.resources
 import json
 import os
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import cv2
@@ -24,7 +23,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 from scipy import ndimage as ndi
-from skimage import feature, filters, io, morphology, segmentation
+from skimage import feature, filters, morphology, segmentation
 
 if TYPE_CHECKING:
     import napari
@@ -362,9 +361,7 @@ class Calcium(QWidget):
         # delete any background labels
         del roi_dict[background_label]
 
-        # print("roi_dict len:", len(roi_dict))
         area_dict, roi_to_delete = self.get_ROI_area(roi_dict, 100)
-        # print("area_dict:", area_dict)
 
         # delete roi in label layer and dict
         for r in roi_to_delete:
@@ -388,7 +385,6 @@ class Calcium(QWidget):
         for r in roi_dict:
             roi_coords = np.array(roi_dict[r]).T.tolist()
             labels[tuple(roi_coords)] = r
-        # print("new roi_dict len:", len(roi_dict))
         return roi_dict, labels
 
     def get_ROI_area(self, roi_dict, threshold):
@@ -519,7 +515,6 @@ class Calcium(QWidget):
                 colors_to_plot.append(self.colors[i])
 
         if len(roi_to_plot) > 0:
-            print('Active ROI:', roi_to_plot)
             self.axes.set_prop_cycle(color=colors_to_plot)
             self.axes_just_traces.set_prop_cycle(color=colors_to_plot)
 
@@ -571,7 +566,6 @@ class Calcium(QWidget):
         #   with each of the template
         # iterate through each label
         for r in roi_dff:
-            # print("\n", r)
             m = np.zeros((len(roi_dff[r]), len(spike_templates)))
             roi_dff_pad = np.pad(roi_dff[r], (0, (max_temp_len - 1)), mode='constant')
             for spike_template_index, spk_temp in enumerate(spike_templates):
@@ -591,7 +585,6 @@ class Calcium(QWidget):
                 if spike_correlations[j] > spk_threshold:
                     s_max = j
                     loop = True
-                    # print(f'start loop at {j}')
 
                     # find the frame for the peak
                     # iterate through the correlation between each pixel with the temp
@@ -604,14 +597,12 @@ class Calcium(QWidget):
                             j += 1
                         else:
                             loop = False
-                    # print(f'end loop at {j} with s_max of {s_max}')
 
                     # find the amplitude
                     window_start = max(0, (s_max - 5))
                     window_end = min((len(roi_dff[r]) - 1), (s_max + 15))
                     window = roi_dff[r][window_start:window_end]
                     peak_height = np.max(window) - np.min(window)
-                    # print(peak_height)
                     if peak_height > 0.02:
                         spike_times[r].append(s_max)
                 j += 1
@@ -653,7 +644,6 @@ class Calcium(QWidget):
                     exposure = float(line[15:-1]) / 1000  # exposure in seconds
                     framerate = 1 / exposure  # frames/second
                     break
-        # print('framerate is:', framerate, 'frames/second')
 
         amplitude_info = self.get_amplitude(roi_dff, spk_times)
         time_to_rise = self.get_time_to_rise(amplitude_info, framerate)
@@ -667,7 +657,6 @@ class Calcium(QWidget):
             roi_analysis[r]['max_slope'] = max_slope[r]
             roi_analysis[r]['IEI'] = IEI[r]
 
-        # print(roi_analysis)
         return roi_analysis, framerate
 
     def get_amplitude(self, roi_dff: dict, spk_times: dict, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
@@ -702,7 +691,6 @@ class Calcium(QWidget):
 
             if len(spk_times[r]) > 0:
                 dff_deriv = np.diff(roi_dff[r]) # the difference between each spike
-                # print(f'ROI {r} spike times: {spk_times[r]}')
 
                 # for each spike in the ROI
                 for i in range(len(spk_times[r])):
@@ -777,7 +765,6 @@ class Calcium(QWidget):
                             if under_thresh_count >= reset_num or end_index >= (len(dff_deriv) - 1) or \
                                     total_count == total_dist:
                                 searching = False
-                    # print(f'ROI {r} spike {i} - start_index: {start_index}, end_index: {end_index}')
 
                     # Save data
                     spk_to_end = roi_dff[r][spk_times[r][i]:(end_index + 1)]
@@ -790,11 +777,6 @@ class Calcium(QWidget):
                     except ValueError:
                         pass
 
-        # for r in amplitude_info:
-        #     print('ROI', r)
-        #     print('amp:', amplitude_info[r]['amplitudes'])
-        #     print('peak:', amplitude_info[r]['peak_indices'])
-        #     print('base:', amplitude_info[r]['base_indices'])
         return amplitude_info
 
     def get_time_to_rise(self, amplitude_info: dict, framerate: float):
@@ -825,7 +807,6 @@ class Calcium(QWidget):
                     else:
                         time_to_rise[r].append(frames)
 
-        # print('time to rise:', time_to_rise)
         return time_to_rise
 
     def get_max_slope(self, roi_dff: dict, amplitude_info: dict):
@@ -1492,7 +1473,6 @@ class Calcium(QWidget):
         # find rois that is in the stimulated area
         st_roi = {}
         for r in self.roi_dict:
-            # print(f'length of r is {len(r)}')
             new_set = {tuple(value) for value in self.roi_dict[r]}
             overlap = len(new_set.intersection(blue_area))
             perc_overlap = overlap / len(self.roi_dict[r])
