@@ -1304,12 +1304,9 @@ class Calcium(QWidget):
         '''
         i = len(self.viewer.layers)-1
         num_layer = -1 if self.blue_file is None else 0
-        print("num_layer is ", num_layer)
         while i > num_layer:
-            print(f'i is {i}')
             self.viewer.layers.pop(i)
             i -= 1
-        print(f'num of layers after clear: {len(self.viewer.layers)}')
 
         if not self.batch_process:
             self.model_unet = None
@@ -1404,7 +1401,9 @@ class Calcium(QWidget):
             self.nst_colors = []
             self.st_axes.cla()
             self.nst_axes.cla()
+            print(f'self model unet is still there {self.model_unet is not None}')
 
+        print("outside of the folder loop")
         self.model_unet = None
         self.batch_process = False
         self.blue_file = None
