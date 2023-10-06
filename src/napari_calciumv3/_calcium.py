@@ -150,7 +150,7 @@ class Calcium(QWidget):
                     self.save_files()
                     self.clear()
 
-            print(f'{folder_path} is done batch processing')
+            print(f'{folder_path} is done batch processing/inspected')
 
             if self.model_unet:
                 self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
@@ -1329,7 +1329,7 @@ class Calcium(QWidget):
 
         self.batch_process = True
         for (folder_path, _, _) in os.walk(self.ca_file):
-            print(f'Analyzing {folder_path}')
+            print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(folder_path, file_name)
@@ -1338,6 +1338,7 @@ class Calcium(QWidget):
                     self.img_stack = self.viewer.layers[1].data
                     self.img_path = file_path
                     self.img_name = file_name
+                    print(f'Analyzing {file_name}')
 
                     # only initiate the trained model once
                     if not self.unet_init:
@@ -1400,7 +1401,7 @@ class Calcium(QWidget):
             self.model_unet = None
             self.unet_init = False
 
-            print(f'{folder_path} is done batch processing')
+            print(f'{folder_path} is done batch processing/inspected')
 
         self.batch_process = False
         self.blue_file = None
