@@ -1303,11 +1303,11 @@ class Calcium(QWidget):
         ---------------
         None
         '''
-        i = len(self.viewer.layers) - 1
-        num_layer = 0 if self.blue_file is None else 1
-        while i >= num_layer:
+        i = len(self.viewer.layers)
+        num_layer = -1 if self.blue_file is None else 0
+        while i > num_layer:
             self.viewer.layers.pop(i)
-            i -= 1
+            i = len(self.viewer.layers)
 
         if not self.batch_process:
             self.model_unet = None
@@ -1516,6 +1516,7 @@ class Calcium(QWidget):
         '''
         if self.roi_dict:
             save_path = self.img_path[0:-4]
+            save_path += '/stimulated' if st else '/non_stimulated'
 
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
