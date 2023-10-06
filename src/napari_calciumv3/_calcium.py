@@ -123,12 +123,11 @@ class Calcium(QWidget):
         # traverse through all the ome.tif files in the selected folder
         for (folder_path, _, _) in os.walk(folder_names[0]):
             # for file_name in Path.iterdir(folder):
-            print("dir_path: ", folder_path)
+            print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
-
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(folder_path, file_name)
-                    print("file_path: ", file_path)
+                    print(f'Analyzing {file_name}')
                     img = tff.imread(file_path, is_ome=False, is_mmstack=False)
                     self.viewer.add_image(img, name=file_name)
 
@@ -144,9 +143,9 @@ class Calcium(QWidget):
                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
                         self.unet_init = True
 
-                    print("self img stack: ", self.img_stack.shape)
-                    print("self img path ", self.img_path)
-                    print("self img name: ", self.img_name)
+                    # print("self img stack: ", self.img_stack.shape)
+                    # print("self img path ", self.img_path)
+                    # print("self img name: ", self.img_name)
 
                     self._on_click()
                     self.save_files()
@@ -1333,11 +1332,23 @@ class Calcium(QWidget):
         self.axes.cla()
         self.canvas_traces.draw_idle()
 
-    def _evk_batch_process(self, blue_file: str, ca_file: str) -> None:
-        st_area_pos = self.process_blue(blue_file, 80)
+    def _evk_batch_process(self) -> None:
+        '''
+        start the batch process for evoked activity analysis
+
+        parameter:
+        ------------
+        None
+
+        return:
+        ------------
+        None
+        '''
+        st_area_pos = self.process_blue(self.blue_file, 80)
 
         self.batch_process = True
         for (folder_path, _, _) in os.walk(self.ca_file):
+            print(f'Analyzing {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(folder_path, file_name)
@@ -1354,25 +1365,6 @@ class Calcium(QWidget):
                         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
                         self.unet_init = True
-
-                    # for file in Path(self.ca_file).glob('**/*.ome.tif'):
-                    #     img = tff.imread(file, is_ome=False, is_mmstack=False)
-                    #     self.viewer.add_image(img, name=file.stem)
-                    #     self.img_stack = self.viewer.layers[1].data
-                    #     self.img_path = str(file)
-                    #     self.img_name = file.stem
-
-                    #     # if opening the file in a new experiment folder
-                    #     if old_parent != file.parent:
-                    #         # set the parent folder
-                    #         old_parent = file.parent
-
-                    #         # initiate the unet model
-                    #         img_size = self.img_stack.shape[-1]
-                    #         dir_path = os.path.dirname(os.path.realpath(__file__))
-                    #         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                    #         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                    #         self.unet_init = True
 
                     # produce the prediction and labeled layers
                     background_layer = 0
@@ -1420,20 +1412,20 @@ class Calcium(QWidget):
                     self.st_axes.cla()
                     self.nst_axes.cla()
 
-                else:
-                    print(f'No ome-tif file found in {folder_path}')
+            self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+            self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
+            self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
 
-            if self.model_unet:
-                self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
-                self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
-                self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
             self.model_unet = None
             self.unet_init = False
+
+            print(f'{folder_path} is done batch processing')
 
         self.batch_process = False
         self.blue_file = None
         self.ca_file = None
         self.viewer.layers.pop(0)
+        print('Batch processing (evoked activity) Done')
 
     def _evk_select(self) -> None:
         '''
@@ -1445,7 +1437,7 @@ class Calcium(QWidget):
         if dialog.select:
             self.blue_file = dialog.blue_fpath
             self.ca_file = dialog.ca_fpath
-            self._evk_batch_process(self.blue_file, self.ca_file)
+            self._evk_batch_process()
         else:
             print("Please select the blue light file and the files to be batch processed")
 
@@ -1666,9 +1658,6 @@ class Calcium(QWidget):
 
             with open(save_path + roi_center_fname, 'w') as roi_file:
                 json.dump(roi_centers, roi_file, indent="")
-
-            # # save the prediction layer
-            # self.prediction_layer.save(save_path + '/prediction.tif')
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
 
