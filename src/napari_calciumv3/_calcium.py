@@ -1568,7 +1568,7 @@ class Calcium(QWidget):
             num_events = np.zeros((len(spike_times.keys()), 3))
             active_roi = 0
             frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(self.spike_times):
+            for i, r in enumerate(spike_times):
                 num_e = len(spike_times[r])
                 if num_e > 0:
                     active_roi += 1
