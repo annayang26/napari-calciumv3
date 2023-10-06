@@ -1303,11 +1303,11 @@ class Calcium(QWidget):
         ---------------
         None
         '''
-        i = len(self.viewer.layers)
+        i = len(self.viewer.layers)-1
         num_layer = -1 if self.blue_file is None else 0
         while i > num_layer:
             self.viewer.layers.pop(i)
-            i = len(self.viewer.layers)
+            i -= 1
 
         if not self.batch_process:
             self.model_unet = None
