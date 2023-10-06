@@ -1559,7 +1559,7 @@ class Calcium(QWidget):
 
             with open(save_path + raw_signal_fname, 'w', newline='') as st_signal_file:
                 writer = csv.writer(st_signal_file, dialect='excel')
-                writer.writerow(raw_signal.keys())
+                writer.writerow(roi_signal.keys())
                 for i in range(raw_signal.shape[0]):
                     writer.writerow(raw_signal[i, :])
 
