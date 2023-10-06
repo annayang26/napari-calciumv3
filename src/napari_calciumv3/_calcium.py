@@ -1042,7 +1042,7 @@ class Calcium(QWidget):
         None.
         '''
         if self.roi_dict:
-            save_path = self.img_path[0:-4]
+            save_path = self.img_path[0:-8]
 
             # create the folder
             if not os.path.isdir(save_path):
@@ -1514,8 +1514,9 @@ class Calcium(QWidget):
         save the analysis files for evoked activity
         '''
         if self.roi_dict:
-            save_path = self.img_path[0:-4]
-            save_path += '/stimulated' if st else '/non_stimulated'
+            save_path = self.img_path[0:-8]
+            group_name = '/stimulated' if st else '/non_stimulated'
+            save_path = os.path.join(save_path, group_name)
 
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
