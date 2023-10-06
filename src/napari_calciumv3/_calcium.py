@@ -121,7 +121,7 @@ class Calcium(QWidget):
         self.batch_process = True
 
         # traverse through all the ome.tif files in the selected folder
-        for (folder_path, _, folder_list) in os.walk(folder_names[0]):
+        for (folder_path, _, _) in os.walk(folder_names[0]):
             # for file_name in Path.iterdir(folder):
             print("dir_path: ", folder_path)
             for file_name in os.listdir(folder_path):
@@ -325,7 +325,10 @@ class Calcium(QWidget):
             roi_dict, labels = self.getROIpos(labels, background_label)
             label_layer = self.viewer.add_labels(labels, name='Segmentation', opacity=1)
         else:
-            self.general_msg('No ROI', 'There were no cells detected')
+            if self.batch_process:
+                print(f'There were no cells detected in <{self.img_name}>')
+            else:
+                self.general_msg('No ROI', 'There were no cells detected')
             labels, label_layer, roi_dict = None, None, None
 
         return labels, label_layer, roi_dict
@@ -535,7 +538,10 @@ class Calcium(QWidget):
                 self.canvas_traces.draw_idle()
                 self.canvas_just_traces.draw_idle()
         else:
-            self.general_msg('No activity', 'No calcium events were detected for any ROI')
+            if self.batch_process:
+                print(f'No calcium events were detected for any ROIs in <{self.img_name}>')
+            else:
+                self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
     def find_peaks(self, roi_dff: dict, template_file: str, spk_threshold: float, reset_threshold: float):
         '''
@@ -1164,12 +1170,17 @@ class Calcium(QWidget):
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
 
-            self.generate_summary(save_path)
+            self.generate_summary(save_path, self.roi_analysis, self.spike_times, 'summary.txt', self.roi_dict, False)
 
         else:
-            self.general_msg('No ROI', 'Cannot save data')
+            if self.batch_process:
+                print(f'Cannot save data for <{self.img_name}>')
+            else:
+                self.general_msg('No ROI', 'Cannot save data')
 
-    def generate_summary(self, save_path:str) -> None:
+    def generate_summary(self, save_path:str, roi_analysis: dict,
+                         spike_times: dict, file_name: str, roi_dict: dict,
+                         evk_group: bool) -> None:
         '''
         to generate a summary of the graphs that include the average and std of 
         amplitudes, time_to_rise, IEI, and mean connectivity
@@ -1178,30 +1189,29 @@ class Calcium(QWidget):
         ------------
         save_path: str.  the prefix of the tif file name
         '''
+        # NOTE: deleted self from each roi_analysis, spike_times, roi_dict
         total_amplitude = []
         total_time_to_rise = []
         total_max_slope = []
         total_IEI = []
         total_num_events = []
 
+        for r in roi_analysis:
+            if len(roi_analysis[r]['amplitudes']) > 0:
+                total_amplitude.extend(roi_analysis[r]['amplitudes'])
+                total_time_to_rise.extend(roi_analysis[r]['time_to_rise'])
+                total_max_slope.extend(roi_analysis[r]['max_slope'])
+                if len(spike_times[r]) > 0:
+                    total_num_events.append(len(spike_times[r]))
+            if len(roi_analysis[r]['IEI']) > 0:
+                total_IEI.extend(roi_analysis[r]['IEI'])
 
-        for r in self.roi_analysis:
-            if len(self.roi_analysis[r]['amplitudes']) > 0:
-                total_amplitude.extend(self.roi_analysis[r]['amplitudes'])
-                total_time_to_rise.extend(self.roi_analysis[r]['time_to_rise'])
-                total_max_slope.extend(self.roi_analysis[r]['max_slope'])
-                # NOTE: add the number of spikes for each roi
-                if len(self.spike_times[r]) > 0:
-                    total_num_events.append(len(self.spike_times[r]))
-            if len(self.roi_analysis[r]['IEI']) > 0:
-                total_IEI.extend(self.roi_analysis[r]['IEI'])
-
-        if any(self.spike_times.values()):
+        if any(spike_times.values()):
             avg_amplitude = np.mean(np.array(total_amplitude))
             std_amplitude = np.std(np.array(total_amplitude))
             avg_max_slope = np.mean(np.array(total_max_slope))
             std_max_slope = np.std(np.array(total_max_slope))
-            # NOTE: get the average num of events
+            # get the average num of events
             avg_num_events = np.mean(np.array(total_num_events))
             std_num_events = np.std(np.array(total_num_events))
             avg_time_to_rise = np.mean(np.array(total_time_to_rise))
@@ -1219,16 +1229,16 @@ class Calcium(QWidget):
             avg_time_to_rise = 'No calcium events detected'
             avg_IEI = 'No calcium events detected'
             avg_num_events = 'No calcium events detected'
-        percent_active = self.analyze_active(self.spike_times)
+        percent_active = self.analyze_active(spike_times)
 
-        with open(save_path + '/summary.txt', 'w') as sum_file:
+        with open(save_path + file_name, 'w') as sum_file:
             units = "seconds" if self.framerate else "frames"
             sum_file.write(f'File: {self.img_path}\n')
             if self.framerate:
                 sum_file.write(f'Framerate: {self.framerate} fps\n')
             else:
                 sum_file.write('No framerate detected\n')
-            sum_file.write(f'Total ROI: {len(self.roi_dict)}\n')
+            sum_file.write(f'Total ROI: {len(roi_dict)}\n')
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
             if len(total_amplitude) > 0:
@@ -1242,7 +1252,6 @@ class Calcium(QWidget):
             sum_file.write(f'Average Interevent Interval (IEI) ({units}): {avg_IEI}\n')
             if len(total_IEI) > 0:
                 sum_file.write(f'\tIEI Standard Deviation: {std_IEI}\n')
-            # NOTE: num_events
             sum_file.write(f'Average Number of events: {avg_num_events}\n')
             if len(total_num_events) > 0:
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
@@ -1256,7 +1265,8 @@ class Calcium(QWidget):
                         frame = self.img_stack.shape[0]
                     sum_file.write(f'\tFrequency (num_events/frame): {avg_num_events/frame}\n')
 
-            sum_file.write(f'Global Connectivity: {self.mean_connect}')
+            if not evk_group:
+                sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
     # Taken from napari-calcium plugin by Federico Gasparoli
     def general_msg(self, message_1: str, message_2: str) -> None:
@@ -1364,6 +1374,9 @@ class Calcium(QWidget):
                 st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
                 roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
                 self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
+                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
+                                       st_spike_times, roi_analysis_st, st_max_correlation,
+                                       st_max_cor_temp, st_roi, st_layer, st_label)
 
                 # unstimulated cells
                 roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
@@ -1371,29 +1384,21 @@ class Calcium(QWidget):
                 nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
                 roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
                 self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
-
-                # calculate connetivity
-                self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-                self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                self.spike_times = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
-                self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
-                self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
-
-                # save file
-                self.save_files()
-                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                       st_spike_times, roi_analysis_st, st_max_correlation,
-                                       st_max_cor_temp, st_roi, st_layer, st_label)
                 self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
                                        nst_spike_times, roi_analysis_nst, nst_max_correlation,
                                        nst_max_cor_temp, nst_roi, nst_layer, nst_label)
 
-                # generate summary file
-
+                # calculate connetivity
+                self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+                self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
+                self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
+                self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+                self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+                self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
+                self.save_files()
 
             # clear
             self.clear()
-            self.ca_file = None
             self.st_colors = []
             self.nst_colors = []
             self.st_axes.cla()
@@ -1402,6 +1407,7 @@ class Calcium(QWidget):
         self.model_unet = None
         self.batch_process = False
         self.blue_file = None
+        self.ca_file = None
         self.unet_init = False
 
     def _evk_select(self) -> None:
@@ -1524,6 +1530,7 @@ class Calcium(QWidget):
             max_cor_temp_fname = '/max_cor_templates_st.csv' if st else '/max_cor_templates_nst.csv'
             roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
+            summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
             # if st:
             #     raw_signal_fname = '/raw_signal_st.csv'
             #     dff_fname = '/dff_st.csv'
@@ -1662,6 +1669,8 @@ class Calcium(QWidget):
             # save the prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
 
+            self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
+
     def evoked_traces(self, st, dff, labels, layer, spike_times) -> None:
         '''
         '''
@@ -1716,7 +1725,7 @@ class Calcium(QWidget):
                     self.st_canvas_traces.draw_idle()
                     self.st_canvas_just_traces.draw_idle()
         else:
-            self.general_msg('No activity', 'No calcium events were detected for any ROI')
+            print(f'{self.img_path} has no calcium events were detected for any ROI')
 
 class EvokedInputDialog(QDialog):
     def __init__(self, parent: QWidget):
