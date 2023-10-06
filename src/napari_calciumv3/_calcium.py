@@ -1336,7 +1336,7 @@ class Calcium(QWidget):
     def _evk_batch_process(self, blue_file: str, ca_file: str) -> None:
         st_area_pos = self.process_blue(blue_file, 80)
 
-        self.batch_proess = True
+        self.batch_process = True
         old_parent = ''
         for file in Path(self.ca_file).glob('**/*.ome.tif'):
             img = tff.imread(file, is_ome=False, is_mmstack=False)
