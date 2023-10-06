@@ -155,7 +155,7 @@ class Calcium(QWidget):
             print(f'{folder_path} is done batch processing')
 
             if self.model_unet:
-                self._compile_data(folder_path)
+                self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
             # reset the model
             self.model_unet = None
             self.unet_init = False
@@ -163,8 +163,8 @@ class Calcium(QWidget):
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
 
-    def _compile_data(self, base_folder,
-                      file_name="summary.txt", variable=None):
+    def compile_data(self, base_folder: str, file_name: str, variable: list,
+                      output_name: str):
         '''
         to compile all the data from different folders into one csv file
         options to include the line name and the variable name(s) to look for; 
@@ -207,37 +207,37 @@ class Calcium(QWidget):
 
         # traverse through all the matching files
         for dir_name in dir_list:
-            result = open(dir_name + "/" + file_name)
-            data = {}
-            data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+            with open(dir_name + "/" + file_name) as file:
+                data = {}
+                data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+                lines = file.readlines()
+                # find the variable in the file
+                for line in lines:
+                    for old_var in variable:
+                        if old_var.lower().strip() in line.lower():
+                            items = line.split(":")
+                            var = items[0].strip()
 
-            # find the variable in the file
-            for line in result:
-                for old_var in variable:
-                    if old_var.lower().strip() in line.lower():
-                        items = line.split(":")
-                        var = items[0].strip()
+                            if var not in data:
+                                data[var] = []
 
-                        if var not in data:
-                            data[var] = []
+                            values = items[1].strip().split(" ")
+                            num = values[0].strip("%")
 
-                        values = items[1].strip().split(" ")
-                        num = values[0].strip("%")
+                            if values[0] == "N/A" or values[0] == "No":
+                                num = 0
+                            data[var] = float(num)
 
-                        if values[0] == "N/A":
-                            num = 0
-                        data[var] = float(num)
-
-            if len(data) > 1:
-                files.append(data)
-            else:
-                print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
+                if len(data) > 1:
+                    files.append(data)
+                else:
+                    print(f'There is no {var} mentioned in the {dir_name}. Please check again.')
 
         if len(files) > 0:
             # write into a new csv file
             field_names = list(data.keys())
 
-            compile_name = os.path.basename(base_folder) + "_compile_file.csv"
+            compile_name = os.path.basename(base_folder) + output_name
 
             with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
@@ -1337,77 +1337,102 @@ class Calcium(QWidget):
         st_area_pos = self.process_blue(blue_file, 80)
 
         self.batch_process = True
-        old_parent = ''
-        for file in Path(self.ca_file).glob('**/*.ome.tif'):
-            img = tff.imread(file, is_ome=False, is_mmstack=False)
-            self.viewer.add_image(img, name=file.stem)
-            self.img_stack = self.viewer.layers[1].data
-            self.img_path = str(file)
-            self.img_name = file.stem
+        for (folder_path, _, _) in os.walk(self.ca_file):
+            for file_name in os.listdir(folder_path):
+                if file_name.endswith(".ome.tif"):
+                    file_path = os.path.join(folder_path, file_name)
+                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.viewer.add_image(img, name=file_name)
+                    self.img_stack = self.viewer.layers[1].data
+                    self.img_path = file_path
+                    self.img_name = file_name
 
-            # if opening the file in a new experiment folder
-            if old_parent != file.parent:
-                # set the parent folder
-                old_parent = file.parent
+                    # only initiate the trained model once
+                    if not self.unet_init:
+                        img_size = self.img_stack.shape[-1]
+                        dir_path = os.path.dirname(os.path.realpath(__file__))
+                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                        self.unet_init = True
 
-                # initiate the unet model
-                img_size = self.img_stack.shape[-1]
-                dir_path = os.path.dirname(os.path.realpath(__file__))
-                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                self.unet_init = True
+                    # for file in Path(self.ca_file).glob('**/*.ome.tif'):
+                    #     img = tff.imread(file, is_ome=False, is_mmstack=False)
+                    #     self.viewer.add_image(img, name=file.stem)
+                    #     self.img_stack = self.viewer.layers[1].data
+                    #     self.img_path = str(file)
+                    #     self.img_name = file.stem
 
-            # produce the prediction and labeled layers
-            background_layer = 0
-            minsize = 100
-            self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
+                    #     # if opening the file in a new experiment folder
+                    #     if old_parent != file.parent:
+                    #         # set the parent folder
+                    #         old_parent = file.parent
 
-            # to group the cells in the stimulated area vs not in the stimulated area
-            if self.label_layer:
-                st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
-                spike_templates_file = 'spikes.json'
-                # stimulated cells
-                roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
-                roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-                st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
-                roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
-                self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
+                    #         # initiate the unet model
+                    #         img_size = self.img_stack.shape[-1]
+                    #         dir_path = os.path.dirname(os.path.realpath(__file__))
+                    #         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                    #         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                    #         self.unet_init = True
 
-                # unstimulated cells
-                roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
-                roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-                nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
-                roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
-                self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
+                    # produce the prediction and labeled layers
+                    background_layer = 0
+                    minsize = 100
+                    self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
 
-                # calculate connetivity
-                self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-                self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
-                self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
-                self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
-                self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
+                    # to group the cells in the stimulated area vs not in the stimulated area
+                    if self.label_layer:
+                        st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
+                        spike_templates_file = 'spikes.json'
+                        # stimulated cells
+                        roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
+                        roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
+                        st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
+                        roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+                        self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
 
-                self.save_files()
-                self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                       st_spike_times, roi_analysis_st, st_max_correlation,
-                                       st_max_cor_temp, st_roi, st_layer, st_label)
-                self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
-                                       nst_spike_times, roi_analysis_nst, nst_max_correlation,
-                                       nst_max_cor_temp, nst_roi, nst_layer, nst_label)
+                        # unstimulated cells
+                        roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
+                        roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
+                        nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
+                        roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                        self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
 
-            # clear
-            self.clear()
-            self.st_colors = []
-            self.nst_colors = []
-            self.st_axes.cla()
-            self.nst_axes.cla()
+                        # calculate connetivity
+                        self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
+                        self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
+                        self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
+                        self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+                        self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
+                        self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
 
-        self.model_unet = None
+                        self.save_files()
+                        self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
+                                            st_spike_times, roi_analysis_st, st_max_correlation,
+                                            st_max_cor_temp, st_roi, st_layer, st_label)
+                        self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
+                                            nst_spike_times, roi_analysis_nst, nst_max_correlation,
+                                            nst_max_cor_temp, nst_roi, nst_layer, nst_label)
+
+                    # clear
+                    self.clear()
+                    self.st_colors = []
+                    self.nst_colors = []
+                    self.st_axes.cla()
+                    self.nst_axes.cla()
+
+                else:
+                    print(f'No ome-tif file found in {folder_path}')
+
+            if self.model_unet:
+                self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+                self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
+                self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
+            self.model_unet = None
+            self.unet_init = False
+
         self.batch_process = False
         self.blue_file = None
         self.ca_file = None
-        self.unet_init = False
         self.viewer.layers.pop(0)
 
     def _evk_select(self) -> None:
@@ -1668,7 +1693,6 @@ class Calcium(QWidget):
             self.nst_colors = colors
 
         if len(roi_to_plot) > 0:
-            print('Active ROI:', roi_to_plot)
             dff_max = np.zeros(len(roi_to_plot))
             for dff_index, dff_key in enumerate(roi_to_plot):
                 dff_max[dff_index] = np.max(dff[dff_key])
