@@ -624,7 +624,6 @@ class Calcium(QWidget):
                         (spike_times[r][k + 1] - spike_times[r][k]) <= 10:
                             spike_times[r][k + 1] = None
                 spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
-        print(f'type of spike time: {type(spike_times)}')
         return spike_times, max_correlations, max_cor_templates
 
     def analyze_ROI(self, roi_dff: dict, spk_times: dict):
@@ -1305,6 +1304,7 @@ class Calcium(QWidget):
         '''
         i = len(self.viewer.layers)-1
         num_layer = -1 if self.blue_file is None else 0
+        print("num_layer is ", num_layer)
         while i > num_layer:
             print(f'i is {i}')
             self.viewer.layers.pop(i)
@@ -1337,7 +1337,6 @@ class Calcium(QWidget):
         self.canvas_traces.draw_idle()
 
     def _evk_batch_process(self, blue_file: str, ca_file: str) -> None:
-        self.ca_file = ca_file
         st_area_pos = self.process_blue(blue_file, 80)
 
         self.batch_proess = True
@@ -1420,9 +1419,9 @@ class Calcium(QWidget):
         dialog.exec_()
 
         if dialog.select:
-            blue_file = dialog.blue_fpath
-            ca_file = dialog.ca_fpath
-            self._evk_batch_process(blue_file, ca_file)
+            self.blue_file = dialog.blue_fpath
+            self.ca_file = dialog.ca_fpath
+            self._evk_batch_process(self.blue_file, self.ca_file)
         else:
             print("Please select the blue light file and the files to be batch processed")
 
