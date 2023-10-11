@@ -186,7 +186,8 @@ class Calcium(QWidget):
         None
         '''
         if variable is None:
-            variable = ["Total ROI", "Percent Active ROI", "Average Amplitude", "Amplitude Standard Deviation",
+            variable = ["Total ROI", "Percent Active ROI", "Average Cell Size", "Cell Size Standard Deviation",
+                        "Average Amplitude", "Amplitude Standard Deviation",
                         "Average Max Slope", "Max Slope Standard Deviation", "Average Time to Rise",
                         "Time to Rise Standard Deviation", "Average Interevent Interval (IEI)",
                         "IEI Standard Deviation", "Average Number of events", "Number of events Standard Deviation",
@@ -1250,13 +1251,13 @@ class Calcium(QWidget):
                 sum_file.write(f'\tNumber of events Standard Deviation: {std_num_events}\n')
                 if self.framerate:
                     frequency = avg_num_events/(self.img_stack.shape[0]/self.framerate)
-                    sum_file.write(f'\tAverage Frequency (num_events/s): {frequency}\n')
+                    sum_file.write(f'Average Frequency (num_events/s): {frequency}\n')
                 else:
                     if len(self.img_stack) > 3:
                         frame = self.img_stack.shape[1]
                     else:
                         frame = self.img_stack.shape[0]
-                    sum_file.write(f'\tFrequency (num_events/frame): {avg_num_events/frame}\n')
+                    sum_file.write(f'Frequency (num_events/frame): {avg_num_events/frame}\n')
 
             if not evk_group:
                 sum_file.write(f'Global Connectivity: {self.mean_connect}')
