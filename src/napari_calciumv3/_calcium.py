@@ -1144,12 +1144,12 @@ class Calcium(QWidget):
                 json.dump(roi_centers, roi_file, indent="")
 
             # save cell size
-            cs_dict = self.save_cell_size(self.roi_dict)
+            _, cs_arr = self.save_cell_size(self.roi_dict)
             cs_field_name = ['ROI', 'cell size']
             with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
-                writer = csv.DictWriter(size_file, fieldnames=cs_field_name)
-                writer.writeheader()
-                writer.writerows(cs_dict)
+                writer = csv.writer(size_file)
+                writer.writerow(cs_field_name)
+                writer.writerows(cs_arr)
 
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
@@ -1173,8 +1173,7 @@ class Calcium(QWidget):
         ------------
         save_path: str.  the prefix of the tif file name
         '''
-        cs_dict = self.save_cell_size(roi_dict)
-        cs_arr = np.array(list(cs_dict.items()))
+        _, cs_arr = self.save_cell_size(roi_dict)
         avg_cs = np.mean(cs_arr, axis=0)
         std_cs = np.std(cs_arr)
 
@@ -1278,7 +1277,9 @@ class Calcium(QWidget):
         for r in roi_dict:
             cs_dict[r] = len(roi_dict[r])
 
-        return cs_dict
+        cs_arr = np.array(list(cs_dict.items()))
+
+        return cs_dict, cs_arr
 
     # Taken from napari-calcium plugin by Federico Gasparoli
     def general_msg(self, message_1: str, message_2: str) -> None:
@@ -1675,12 +1676,12 @@ class Calcium(QWidget):
                 json.dump(roi_centers, roi_file, indent="")
 
             # save cell size
-            cs_dict = self.save_cell_size(roi_dict)
+            _, cs_arr = self.save_cell_size(roi_dict)
             cs_field_name = ['ROI', 'cell size']
-            with open(save_path + cs_fname, 'w', newline='') as size_file:
-                writer = csv.DictWriter(size_file, fieldnames=cs_field_name)
-                writer.writeheader()
-                writer.writerows(cs_dict)
+            with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
+                writer = csv.writer(size_file)
+                writer.writerow(cs_field_name)
+                writer.writerows(cs_arr)
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
 
