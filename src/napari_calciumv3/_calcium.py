@@ -1076,13 +1076,13 @@ class Calcium(QWidget):
             num_events = np.zeros((len(self.spike_times.keys()), 3))
             active_roi = 0
             frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for r in self.spike_times:
+            for i, r in enumerate(self.spike_times):
                 num_e = len(self.spike_times[r])
                 if num_e > 0:
                     active_roi += 1
-                num_events[r, 0] = i
-                num_events[r, 1] = num_e
-                num_events[r, 2] = num_e / frame_info
+                num_events[i, 0] = r
+                num_events[i, 1] = num_e
+                num_events[i, 2] = num_e / frame_info
 
             with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
@@ -1602,13 +1602,13 @@ class Calcium(QWidget):
             num_events = np.zeros((len(spike_times.keys()), 3))
             active_roi = 0
             frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for r in spike_times:
+            for i, r in enumerate(spike_times):
                 num_e = len(spike_times[r])
                 if num_e > 0:
                     active_roi += 1
-                num_events[r, 0] = i
-                num_events[r, 1] = num_e
-                num_events[r, 2] = num_e / frame_info
+                num_events[i, 0] = r
+                num_events[i, 1] = num_e
+                num_events[i, 2] = num_e / frame_info
 
             with open(save_path + num_e_fname, 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
