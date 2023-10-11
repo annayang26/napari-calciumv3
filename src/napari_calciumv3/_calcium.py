@@ -1076,13 +1076,13 @@ class Calcium(QWidget):
             num_events = np.zeros((len(self.spike_times.keys()), 3))
             active_roi = 0
             frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(self.spike_times):
+            for r in self.spike_times:
                 num_e = len(self.spike_times[r])
                 if num_e > 0:
                     active_roi += 1
-                num_events[i, 0] = i
-                num_events[i, 1] = num_e
-                num_events[i, 2] = num_e / frame_info
+                num_events[r, 0] = i
+                num_events[r, 1] = num_e
+                num_events[r, 2] = num_e / frame_info
 
             with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
@@ -1174,8 +1174,8 @@ class Calcium(QWidget):
         save_path: str.  the prefix of the tif file name
         '''
         _, cs_arr = self.save_cell_size(roi_dict)
-        avg_cs = np.mean(cs_arr, axis=0)
-        std_cs = np.std(cs_arr)
+        avg_cs = float(np.mean(cs_arr, axis=0)[1])
+        std_cs = float(np.std(cs_arr)[1])
 
         total_amplitude = []
         total_time_to_rise = []
@@ -1602,13 +1602,13 @@ class Calcium(QWidget):
             num_events = np.zeros((len(spike_times.keys()), 3))
             active_roi = 0
             frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(spike_times):
+            for r in spike_times:
                 num_e = len(spike_times[r])
                 if num_e > 0:
                     active_roi += 1
-                num_events[i, 0] = i
-                num_events[i, 1] = num_e
-                num_events[i, 2] = num_e / frame_info
+                num_events[r, 0] = i
+                num_events[r, 1] = num_e
+                num_events[r, 2] = num_e / frame_info
 
             with open(save_path + num_e_fname, 'w', newline='') as num_event_file:
                 writer = csv.writer(num_event_file, dialect="excel")
@@ -1678,7 +1678,7 @@ class Calcium(QWidget):
             # save cell size
             _, cs_arr = self.save_cell_size(roi_dict)
             cs_field_name = ['ROI', 'cell size']
-            with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
+            with open(save_path + cs_fname, 'w', newline='') as size_file:
                 writer = csv.writer(size_file)
                 writer.writerow(cs_field_name)
                 writer.writerows(cs_arr)
