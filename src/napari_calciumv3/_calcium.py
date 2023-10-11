@@ -1143,6 +1143,14 @@ class Calcium(QWidget):
             with open(save_path + '/roi_centers.json', 'w') as roi_file:
                 json.dump(roi_centers, roi_file, indent="")
 
+            # save cell size
+            cs_dict = self.save_cell_size(self.roi_dict)
+            cs_field_name = ['ROI', 'cell size']
+            with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
+                writer = csv.DictWriter(size_file, fieldnames=cs_field_name)
+                writer.writeheader()
+                writer.writerows(cs_dict)
+
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
 
@@ -1165,7 +1173,11 @@ class Calcium(QWidget):
         ------------
         save_path: str.  the prefix of the tif file name
         '''
-        # NOTE: deleted self from each roi_analysis, spike_times, roi_dict
+        cs_dict = self.save_cell_size(roi_dict)
+        cs_arr = np.array(list(cs_dict.items()))
+        avg_cs = np.mean(cs_arr, axis=0)
+        std_cs = np.std(cs_arr)
+
         total_amplitude = []
         total_time_to_rise = []
         total_max_slope = []
@@ -1216,7 +1228,13 @@ class Calcium(QWidget):
                 sum_file.write('No framerate detected\n')
             sum_file.write(f'Total ROI: {len(roi_dict)}\n')
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
+
+            # NOTE: include cell size in the summary text file
+            sum_file.write(f'Average Cell Size: {avg_cs}\n')
+            sum_file.write(f'\tCell Size Standard Deviation: {std_cs}\n')
+
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
+
             if len(total_amplitude) > 0:
                 sum_file.write(f'\tAmplitude Standard Deviation: {std_amplitude}\n')
             sum_file.write(f'Average Max Slope: {avg_max_slope}\n')
@@ -1243,6 +1261,24 @@ class Calcium(QWidget):
 
             if not evk_group:
                 sum_file.write(f'Global Connectivity: {self.mean_connect}')
+
+    def save_cell_size(self, roi_dict) -> dict:
+        '''
+        calculate the cell size of each labeled cell
+
+        parameters:
+        -------------
+        roi_dict: dict. label-pixel(pos) pair
+
+        return:
+        -------------
+        cs_dict: dict. label-cell_size pair
+        '''
+        cs_dict = {}
+        for r in roi_dict:
+            cs_dict[r] = len(roi_dict[r])
+
+        return cs_dict
 
     # Taken from napari-calcium plugin by Federico Gasparoli
     def general_msg(self, message_1: str, message_2: str) -> None:
@@ -1527,6 +1563,7 @@ class Calcium(QWidget):
             roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
             summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
+            cs_fname = '/roi_size_st.csv' if st else '/roi_size_nst.csv'
 
             raw_signal = np.zeros([len(roi_signal[list(roi_signal.keys())[0]]), len(roi_signal)])
             for i, r in enumerate(roi_signal):
@@ -1636,6 +1673,14 @@ class Calcium(QWidget):
 
             with open(save_path + roi_center_fname, 'w') as roi_file:
                 json.dump(roi_centers, roi_file, indent="")
+
+            # save cell size
+            cs_dict = self.save_cell_size(roi_dict)
+            cs_field_name = ['ROI', 'cell size']
+            with open(save_path + cs_fname, 'w', newline='') as size_file:
+                writer = csv.DictWriter(size_file, fieldnames=cs_field_name)
+                writer.writeheader()
+                writer.writerows(cs_dict)
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
 
