@@ -1175,7 +1175,7 @@ class Calcium(QWidget):
         '''
         _, cs_arr = self.save_cell_size(roi_dict)
         avg_cs = float(np.mean(cs_arr, axis=0)[1])
-        std_cs = float(np.std(cs_arr)[1])
+        std_cs = float(np.std(cs_arr, axis=0)[1])
 
         total_amplitude = []
         total_time_to_rise = []
