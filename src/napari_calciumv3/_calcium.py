@@ -1764,28 +1764,55 @@ class EvokedInputDialog(QDialog):
         self.layout.addWidget(self.cancel_btn, 4, 1)
         self.setLayout(self.layout)
 
-        self.ok_btn.clicked.connect(self.accept)
+        self.ok_btn.clicked.connect(self.result)
         self.cancel_btn.clicked.connect(self.reject)
-        self.result()
 
-    def _select_blue(self):
+    def _select_blue(self) -> None:
+        '''
+        select the blue light file
+        '''
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.ExistingFile)
         if dlg.exec_():
             self.blue_fpath = dlg.selectedFiles()[0]
             self._update_fname(self.blue_fpath, 1)
 
-    def _select_folder(self):
+    def _select_folder(self) -> None:
+        '''
+        select folder to batch process
+        '''
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.Directory)
         if dlg.exec_():
             self.ca_fpath = dlg.selectedFiles()[0]
             self._update_fname(self.ca_fpath, 3)
 
-    def _update_fname(self, file, row):
+    def _update_fname(self, file, row) -> None:
+        '''
+        update the filename displayed on the selection window
+        '''
         self.layout.addWidget(QLabel(file), row, 0)
 
-    def result(self):
-        if self.accepted:
+    def result(self) -> None:
+        '''
+        check the selection
+        '''
+        if self.ca_fpath is None:
+            missing_var = "Recording folder"
+        elif self.blue_fpath is None:
+            missing_var = "Blue light file"
+        if missing_var:
+            self.error_msg(missing_var)
+        else:
             self.select = True
+
+    # def error_msg(self, missing_var) -> None:
+    #     '''
+    #     show the error msg
+    #     '''
+    #     msg_box = QMessageBox()
+    #     msg = f'Please select {missing_var} before proceeding'
+    #     msg_box.setInformativeText(msg)
+    #     msg_box.setStandardButtons(QMessageBox.Ok)
+    #     msg_box.exec()
 
