@@ -1807,13 +1807,13 @@ class EvokedInputDialog(QDialog):
             self.select = True
             self.accept()
 
-    # def error_msg(self, missing_var) -> None:
-    #     '''
-    #     show the error msg
-    #     '''
-    #     msg_box = QMessageBox()
-    #     msg = f'Please select {missing_var} before proceeding'
-    #     msg_box.setInformativeText(msg)
-    #     msg_box.setStandardButtons(QMessageBox.Ok)
-    #     msg_box.exec()
+    def error_msg(self, missing_var) -> None:
+        '''
+        show the error msg
+        '''
+        msg_box = QMessageBox()
+        msg = f'Please select {missing_var} before proceeding'
+        msg_box.setInformativeText(msg)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.exec()
 
