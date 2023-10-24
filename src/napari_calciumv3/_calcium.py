@@ -1806,6 +1806,7 @@ class EvokedInputDialog(QDialog):
             self.error_msg(missing_var)
         else:
             self.select = True
+            self.accept()
 
     # def error_msg(self, missing_var) -> None:
     #     '''
