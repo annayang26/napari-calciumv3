@@ -1483,9 +1483,13 @@ class Calcium(QWidget):
 
         # only include the pixels that is brighter than 80
         st_area = np.where(closing>threshold, 1, 0)
-        self.viewer.add_image(st_area, name="stimulated area")
+        processed_blue = self.viewer.add_image(st_area, name="stimulated area")
+
+        save_path = os.path.dirname(blue_file_path)
+        processed_blue.save(save_path + '/processed_blue.tif')
+
         st_area_pos = set()
-        for i in range(st_area.shape[0]):
+        for i in range(st_area.shape[0]):s
             for j in range(st_area.shape[1]):
                 if st_area[i][j] == 1:
                     st_area_pos.add((i, j)) # row, column
