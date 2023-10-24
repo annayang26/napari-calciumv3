@@ -1557,7 +1557,7 @@ class Calcium(QWidget):
             raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
             dff_fname = '/dff_st.csv' if st else '/dff_nst.csv'
             median_fname = '/medians_st.json' if st else '/medians_nst.json'
-            spike_fname = 'spike_times_st.json' if st else 'spike_times_nst.json'
+            spike_fname = '/spike_times_st.json' if st else '/spike_times_nst.json'
             roi_analysis_fname = '/roi_analysis_st.json' if st else '/roi_analysis_nst.json'
             num_e_fname = '/num_events_st.csv' if st else '/num_events_nst.csv'
             max_cor_fname = '/max_correlations_st.csv' if st else '/max_correlations_nst.csv'
@@ -1591,9 +1591,12 @@ class Calcium(QWidget):
             with open(save_path + median_fname, 'w') as median_file:
                 json.dump(median, median_file, indent="")
 
-            # the label-frame of peaks pairs
-            with open(os.path.join(save_path, spike_fname), 'w') as spike_file:
-                json.dump(spike_times, spike_file, indent="")
+            try:
+                # the label-frame of peaks pairs
+                with open(save_path + spike_fname, 'w') as spike_file:
+                    json.dump(spike_times, spike_file, indent="")
+            except FileNotFoundError:
+                pass
 
             # dict. label (int) - dict[amplitude, peak_indices, base_indices]
             with open(save_path + roi_analysis_fname, 'w') as analysis_file:
