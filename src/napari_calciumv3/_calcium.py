@@ -1456,7 +1456,7 @@ class Calcium(QWidget):
             self.ca_file = dialog.ca_fpath
             self._evk_batch_process()
         else:
-            print("Please select the blue light file and the files to be batch processed")
+            print("You canceled batch process for evoked activity")
 
     def process_blue(self, blue_file_path: str, threshold: int) -> set:
         '''
