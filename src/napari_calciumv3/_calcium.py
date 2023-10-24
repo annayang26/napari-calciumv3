@@ -1591,16 +1591,12 @@ class Calcium(QWidget):
             with open(save_path + median_fname, 'w') as median_file:
                 json.dump(median, median_file, indent="")
 
-            try:
-                # the label-frame of peaks pairs
-                with open(save_path + spike_fname, 'w') as spike_file:
-                    json.dump(spike_times, spike_file, indent="")
-                # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-                with open(save_path + roi_analysis_fname, 'w') as analysis_file:
-                    json.dump(roi_analysis, analysis_file, indent="")
-            except FileNotFoundError:
-                pass
-
+            # the label-frame of peaks pairs
+            with open(save_path + spike_fname, 'w') as spike_file:
+                json.dump(spike_times, spike_file, indent="")
+            # dict. label (int) - dict[amplitude, peak_indices, base_indices]
+            with open(save_path + roi_analysis_fname, 'w') as analysis_file:
+                json.dump(roi_analysis, analysis_file, indent="")
 
             # num of events and frequency
             num_events = np.zeros((len(spike_times.keys()), 3))
