@@ -1797,6 +1797,7 @@ class EvokedInputDialog(QDialog):
         '''
         check the selection
         '''
+        missing_var = None
         if self.ca_fpath is None:
             missing_var = "Recording folder"
         elif self.blue_fpath is None:
