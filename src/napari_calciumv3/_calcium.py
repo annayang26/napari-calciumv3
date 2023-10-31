@@ -114,54 +114,54 @@ class Calcium(QWidget):
         dlg.setFileMode(QFileDialog.Directory)
 
         if dlg.exec_():
-            folder_names = dlg.selectedFiles() # list of the path to the folder selected
+            folder_names = dlg.selectedFiles()
+            self.batch_process = True
 
-        self.batch_process = True
+        if self.batch_process:
+            # traverse through all the ome.tif files in the selected folder
+            for (folder_path, _, _) in os.walk(folder_names[0]):
+                # for file_name in Path.iterdir(folder):
+                print(f'Inside {folder_path}')
+                for file_name in os.listdir(folder_path):
+                    if file_name.endswith(".ome.tif"):
+                        try:
+                            file_path = os.path.join(folder_path, file_name)
+                            print(f'Analyzing {file_name}')
+                            img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                            self.viewer.add_image(img, name=file_name)
 
-        # traverse through all the ome.tif files in the selected folder
-        for (folder_path, _, _) in os.walk(folder_names[0]):
-            # for file_name in Path.iterdir(folder):
-            print(f'Inside {folder_path}')
-            for file_name in os.listdir(folder_path):
-                if file_name.endswith(".ome.tif"):
-                    try:
-                        file_path = os.path.join(folder_path, file_name)
-                        print(f'Analyzing {file_name}')
-                        img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                        self.viewer.add_image(img, name=file_name)
+                            self.img_stack = self.viewer.layers[0].data
+                            self.img_path = file_path
+                            self.img_name = file_name
 
-                        self.img_stack = self.viewer.layers[0].data
-                        self.img_path = file_path
-                        self.img_name = file_name
+                            # only initiate the trained model once
+                            if not self.unet_init:
+                                img_size = self.img_stack.shape[-1]
+                                dir_path = os.path.dirname(os.path.realpath(__file__))
+                                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                                self.unet_init = True
 
-                        # only initiate the trained model once
-                        if not self.unet_init:
-                            img_size = self.img_stack.shape[-1]
-                            dir_path = os.path.dirname(os.path.realpath(__file__))
-                            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                            self.unet_init = True
+                            # print("self img stack: ", self.img_stack.shape)
+                            # print("self img path ", self.img_path)
+                            # print("self img name: ", self.img_name)
 
-                        # print("self img stack: ", self.img_stack.shape)
-                        # print("self img path ", self.img_path)
-                        # print("self img name: ", self.img_name)
+                            self._on_click()
+                            self.save_files()
+                        except IndexError:
+                            pass
+                        self.clear()
 
-                        self._on_click()
-                        self.save_files()
-                    except IndexError:
-                        pass
-                    self.clear()
+                print(f'{folder_path} is done batch processing/inspected')
 
-            print(f'{folder_path} is done batch processing/inspected')
+                if self.model_unet:
+                    self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+                # reset the model
+                self.model_unet = None
+                self.unet_init = False
 
-            if self.model_unet:
-                self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
-            # reset the model
-            self.model_unet = None
-            self.unet_init = False
-
-        print('Batch Processing (spontaneous activity) Done')
-        self.batch_process = False
+            print('Batch Processing (spontaneous activity) Done')
+            self.batch_process = False
 
     def compile_data(self, base_folder: str, file_name: str, variable: list,
                       output_name: str) -> None:
