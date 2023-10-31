@@ -1489,7 +1489,7 @@ class Calcium(QWidget):
         processed_blue.save(save_path + '/processed_blue.tif')
 
         st_area_pos = set()
-        for i in range(st_area.shape[0]):s
+        for i in range(st_area.shape[0]):
             for j in range(st_area.shape[1]):
                 if st_area[i][j] == 1:
                     st_area_pos.add((i, j)) # row, column
