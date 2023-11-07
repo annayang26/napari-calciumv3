@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
+import plotly.express as px
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -114,16 +116,25 @@ class Calcium(QWidget):
         dlg.setFileMode(QFileDialog.Directory)
 
         if dlg.exec_():
-            folder_names = dlg.selectedFiles()
+            folder_name = dlg.selectedFiles()
             self.batch_process = True
 
+        csv_path = []
+
+        # NOTE (TO TEST): 11/2: use the full os.walk to make it easy for extract data from each csv file 
         if self.batch_process:
             # traverse through all the ome.tif files in the selected folder
-            for (folder_path, _, _) in os.walk(folder_names[0]):
-                # for file_name in Path.iterdir(folder):
+            for (folder_path, _, files) in os.walk(folder_name[0]):
                 print(f'Inside {folder_path}')
-                for file_name in os.listdir(folder_path):
+                if folder_path.lower().contains("evo"):
+                    print("The program skipped the evoked activitiy folder")
+                    continue
+
+                for file_name in files:
                     if file_name.endswith(".ome.tif"):
+                        if file_name.lower().contains("evo"): # double check evoked activity
+                            print("The program skipped the evoked activity files")
+                            continue
                         try:
                             file_path = os.path.join(folder_path, file_name)
                             print(f'Analyzing {file_name}')
@@ -156,12 +167,147 @@ class Calcium(QWidget):
 
                 if self.model_unet:
                     self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+                    csv_path.append(folder_path)
+
                 # reset the model
                 self.model_unet = None
                 self.unet_init = False
 
-            print('Batch Processing (spontaneous activity) Done')
+
+
             self.batch_process = False
+            print('Batch Processing (spontaneous activity) Done')
+ 
+        # if self.batch_process:
+        #     # traverse through all the ome.tif files in the selected folder
+        #     for (folder_path, _, _) in os.walk(folder_name[0]):
+        #         print(f'Inside {folder_path}')
+
+        #         # NOTE: 11/2-skip the evoked activity analysis in spontaneous activity batch process
+        #         if folder_path.contains("evo"):
+        #             print("The program skipped the evoked activitiy folder")
+        #             continue
+        #         for file_name in os.listdir(folder_path):
+        #             if file_name.endswith(".ome.tif"):
+        #                 if file_name.contains("evo"): # double check evoked activity
+        #                     print("The program skipped the evoked activity files")
+        #                     continue
+        #                 try:
+        #                     file_path = os.path.join(folder_path, file_name)
+        #                     print(f'Analyzing {file_name}')
+        #                     img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+        #                     self.viewer.add_image(img, name=file_name)
+
+        #                     self.img_stack = self.viewer.layers[0].data
+        #                     self.img_path = file_path
+        #                     self.img_name = file_name
+
+        #                     # only initiate the trained model once
+        #                     if not self.unet_init:
+        #                         img_size = self.img_stack.shape[-1]
+        #                         dir_path = os.path.dirname(os.path.realpath(__file__))
+        #                         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+        #                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+        #                         self.unet_init = True
+
+        #                     # print("self img stack: ", self.img_stack.shape)
+        #                     # print("self img path ", self.img_path)
+        #                     # print("self img name: ", self.img_name)
+
+        #                     self._on_click()
+        #                     self.save_files()
+        #                 except IndexError:
+        #                     pass
+        #                 self.clear()
+
+        #         print(f'{folder_path} is done batch processing/inspected')
+
+        #         if self.model_unet:
+        #             self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+        #             # csv_folders.append(folder_path)
+
+        #         # reset the model
+        #         self.model_unet = None
+        #         self.unet_init = False
+
+        #     self.batch_process = False
+        #     print('Batch Processing (spontaneous activity) Done')
+
+    def compile_csv_spon(self, base_folder: str, csv_path: list):
+        '''
+        compile each field from all the csv files (spontaneous activity)
+        ASSUME that the file name follow the structure of "CellCode_[date of recording]_DIVxx_spon_genotype"
+        '''
+        field_names = ["Percent Active ROI (%)", "Average Cell Size", "Average Amplitude", "Average Max Slope",
+                       "Average Time to Rise (seconds)", "Average Interevent Interval (IEI) (seconds)",
+                       "Average Number of events", "Average Frequency (num_events/s)", "Global Connectivity"]
+
+        for csv_file in csv_path:
+            csv_fname = csv_file + "/_compiled.csv"            
+            cell_code, date, genotype = self.split_name(csv_fname) 
+
+            save_path = base_folder + "/" + cell_code # base_folder: the folder that the user selected for batch process
+            if not os.path.isdir(save_path):
+                os.mkdir(save_path)
+
+            csv_df = pd.read_csv(csv_fname)
+
+            for field in field_names:
+                data_list =[]
+                for entry in csv_df[field]:
+                    data_line = [genotype, date, entry]
+                    data_list.append(data_line)
+                file_name = save_path + "/" + field + ".csv"
+                if field == "Average Frequency (num_events/s)":
+                    file_name = save_path + "/" + "frequency" + ".csv"
+                if not os.path.isfile(file_name):
+                    with open(file_name, "w", newline="") as c_file:
+                        fieldnames = ["genotype", "DIV", field]
+                        writer = csv.writer(c_file)
+                        writer.writerow(fieldnames)
+
+                with open(file_name, "a", newline='') as c_file:
+                    writer = csv.writer(c_file)
+                    writer.writerows(data_list)
+
+    def make_graphs(self, folder):
+        '''
+        
+        '''
+        for csv_file in os.listdir(folder):
+            if csv_file.endswith(".csv"):
+                csv_df = pd.read_csv(folder+'/'+csv_file)
+                field_name = csv_file[:-4]
+                if field_name == "frequency":
+                    field_name = "Average Frequency (num_events/s)"
+                fig = px.histogram(csv_df, x="genotype", y=field_name,
+                                barmode="group")
+                field_name = csv_file[:-4]
+                fig.write_image(field_name+".png")
+
+    def split_name(self, file_name: str) -> str:
+        '''
+        gather information about the recordings
+
+        parameter:
+        -------------
+        file_name: str. name of the file
+        '''
+        parts = file_name.split("_")
+        cell_code = parts[0]
+        for i in range(len(parts)):
+            if "div" in parts[i].lower():
+                date = parts[i]
+        if date is None:
+            date = parts[1]
+        if "+" in parts and "-" in parts:
+            genotype = "+_-"
+        elif parts.count("+") == 2:
+            genotype = "+_+"
+        elif parts.count("-") == 2:
+            genotype = "-_-"
+
+        return cell_code, date, genotype
 
     def compile_data(self, base_folder: str, file_name: str, variable: list,
                       output_name: str) -> None:
@@ -205,7 +351,16 @@ class Calcium(QWidget):
         for dir_name in dir_list:
             with open(dir_name + "/" + file_name) as file:
                 data = {}
-                data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+
+                # NOTE: change on 11/2 to have a complete name for stimulted/nonstimulated files
+                if dir_name == "stimulated":
+                    var_name = base_folder + "_st"
+                elif dir_name == "non_stimulated":
+                    var_name = base_folder + "_nst"
+                else:
+                    var_name = dir_name.split(os.path.sep)[-1][:-15]
+                data['name'] = var_name
+
                 lines = file.readlines()
                 # find the variable in the file
                 for line in lines:
@@ -235,13 +390,13 @@ class Calcium(QWidget):
 
             compile_name = os.path.basename(base_folder) + output_name
 
-            with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
+            with open(base_folder + "/" + compile_name, 'w', newline='') as c_file: # TODO: why use base_folder and compile_name here
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)
         else:
             print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
-
+                    
     def _on_click(self) -> None:
         '''
         once hit the "Analyze" botton, the program will load the trained
@@ -1820,4 +1975,3 @@ class EvokedInputDialog(QDialog):
         msg_box.setInformativeText(msg)
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec()
-
