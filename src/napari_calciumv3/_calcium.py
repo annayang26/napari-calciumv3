@@ -5,9 +5,12 @@ import os
 from typing import TYPE_CHECKING
 
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import plotly.express as px
+
+# import plotly.express as px
+import seaborn as sns
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
@@ -280,16 +283,25 @@ class Calcium(QWidget):
         '''
 
         '''
+        sns.set_theme(style="white", palette="pastel")
         for csv_file in os.listdir(folder):
             if csv_file.endswith(".csv"):
+                # barplot
                 csv_df = pd.read_csv(folder+'/'+csv_file)
+                # csv_df = sns.load_dataset(folder+'/'+csv_file)
                 field_name = csv_file[:-4]
                 if field_name == "frequency":
                     field_name = "Average Frequency (num_events/s)"
-                fig = px.histogram(csv_df, x="name", y=field_name,
-                                barmode="group")
-                field_name = csv_file[:-4]
-                fig.write_image(field_name+".png")
+                x = csv_df["name"]
+                y = csv_df[field_name]
+                sns.barplot(x=x, y=y)
+                sns.set_axis_labels("", field_name)
+                plt.savefig(field_name + ".png")
+
+                # fig = px.histogram(csv_df, x="name", y=field_name,
+                #                 barmode="group")
+                # field_name = csv_file[:-4]
+                # fig.write_image(field_name+".png")
 
     # NOTE: not sure if this is necessary
     def split_name(self, file_name: str) -> str:
