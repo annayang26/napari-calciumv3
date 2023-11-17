@@ -173,7 +173,7 @@ class Calcium(QWidget):
                     csv_path.append(folder_path)
 
                 self.compile_csv_spon(folder_name[0], csv_path)
-                self.make_graph(folder_name[0])
+                self.make_graphs(folder_name[0])
 
                 # reset the model
                 self.model_unet = None
