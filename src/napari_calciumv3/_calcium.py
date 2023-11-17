@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
-import plotly.express as px
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
 from PIL import Image
@@ -121,12 +121,12 @@ class Calcium(QWidget):
 
         csv_path = []
 
-        # NOTE (TO TEST): 11/2: use the full os.walk to make it easy for extract data from each csv file 
+        # NOTE (TO TEST): 11/2: use the full os.walk to make it easy for extract data from each csv file
         if self.batch_process:
             # traverse through all the ome.tif files in the selected folder
             for (folder_path, _, files) in os.walk(folder_name[0]):
                 print(f'Inside {folder_path}')
-                if folder_path.lower().contains("evo"):
+                if "evo" in folder_path.lower() or "evk" in folder_path.lower():
                     print("The program skipped the evoked activitiy folder")
                     continue
 
@@ -169,15 +169,17 @@ class Calcium(QWidget):
                     self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
                     csv_path.append(folder_path)
 
+                self.compile_csv_spon(folder_name[0], csv_path)
+                self.make_graph(folder_name[0])
+
                 # reset the model
                 self.model_unet = None
                 self.unet_init = False
 
 
-
             self.batch_process = False
             print('Batch Processing (spontaneous activity) Done')
- 
+
         # if self.batch_process:
         #     # traverse through all the ome.tif files in the selected folder
         #     for (folder_path, _, _) in os.walk(folder_name[0]):
@@ -233,36 +235,40 @@ class Calcium(QWidget):
         #     self.batch_process = False
         #     print('Batch Processing (spontaneous activity) Done')
 
+    # NOTE: not sure if this is necessary
     def compile_csv_spon(self, base_folder: str, csv_path: list):
         '''
         compile each field from all the csv files (spontaneous activity)
-        ASSUME that the file name follow the structure of "CellCode_[date of recording]_DIVxx_spon_genotype"
+        ASSUME that the file name follow the structure of "CellCode_[date of recording]_DIVxx_genotype"
         '''
         field_names = ["Percent Active ROI (%)", "Average Cell Size", "Average Amplitude", "Average Max Slope",
                        "Average Time to Rise (seconds)", "Average Interevent Interval (IEI) (seconds)",
                        "Average Number of events", "Average Frequency (num_events/s)", "Global Connectivity"]
 
         for csv_file in csv_path:
-            csv_fname = csv_file + "/_compiled.csv"            
-            cell_code, date, genotype = self.split_name(csv_fname) 
+            csv_fname = csv_file + "_compiled.csv"
+            # cell_code, date, genotype = self.split_name(csv_fname)
 
-            save_path = base_folder + "/" + cell_code # base_folder: the folder that the user selected for batch process
-            if not os.path.isdir(save_path):
-                os.mkdir(save_path)
+            # save_path = base_folder
+            #  + "/" + cell_code # base_folder: the folder that the user selected for batch process
+            # if not os.path.isdir(save_path):
+            #     os.mkdir(save_path)
 
             csv_df = pd.read_csv(csv_fname)
+            rec_name = csv_df["name"][0]
+            rec_name = rec_name.replace("_1_MMStack", "")
 
             for field in field_names:
                 data_list =[]
                 for entry in csv_df[field]:
-                    data_line = [genotype, date, entry]
+                    data_line = [rec_name, entry]
                     data_list.append(data_line)
-                file_name = save_path + "/" + field + ".csv"
+                file_name = base_folder + "/" + field + ".csv"
                 if field == "Average Frequency (num_events/s)":
-                    file_name = save_path + "/" + "frequency" + ".csv"
+                    file_name = base_folder + "/" + "frequency" + ".csv"
                 if not os.path.isfile(file_name):
                     with open(file_name, "w", newline="") as c_file:
-                        fieldnames = ["genotype", "DIV", field]
+                        fieldnames = ["name", field]
                         writer = csv.writer(c_file)
                         writer.writerow(fieldnames)
 
@@ -272,7 +278,7 @@ class Calcium(QWidget):
 
     def make_graphs(self, folder):
         '''
-        
+
         '''
         for csv_file in os.listdir(folder):
             if csv_file.endswith(".csv"):
@@ -280,11 +286,12 @@ class Calcium(QWidget):
                 field_name = csv_file[:-4]
                 if field_name == "frequency":
                     field_name = "Average Frequency (num_events/s)"
-                fig = px.histogram(csv_df, x="genotype", y=field_name,
+                fig = px.histogram(csv_df, x="name", y=field_name,
                                 barmode="group")
                 field_name = csv_file[:-4]
                 fig.write_image(field_name+".png")
 
+    # NOTE: not sure if this is necessary
     def split_name(self, file_name: str) -> str:
         '''
         gather information about the recordings
@@ -292,6 +299,12 @@ class Calcium(QWidget):
         parameter:
         -------------
         file_name: str. name of the file
+
+        returns:
+        -------------
+        cell_code: str. the cell code extracted from the file name
+        date: str. the date of recording extracted from the file name. i.e. DIVxx or YearMonthDay
+        genotype: 
         '''
         parts = file_name.split("_")
         cell_code = parts[0]
@@ -396,7 +409,7 @@ class Calcium(QWidget):
                 writer.writerows(files)
         else:
             print('no data was found. please check the folder to see if there is any matching file')  # noqa: E501
-                    
+
     def _on_click(self) -> None:
         '''
         once hit the "Analyze" botton, the program will load the trained
@@ -1197,7 +1210,7 @@ class Calcium(QWidget):
 
             # signal corrected based on the background signal
             # columns = number of segmented ROIs
-            # rows (shape= num of frames) = corrected signals based on 
+            # rows (shape= num of frames) = corrected signals based on
             #   the background signal at each frame for each ROI
             dff_signal = np.zeros([len(self.roi_dff[list(self.roi_dff.keys())[0]]), len(self.roi_dff)])
             for i, r in enumerate(self.roi_dff):
