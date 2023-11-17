@@ -135,7 +135,7 @@ class Calcium(QWidget):
 
                 for file_name in files:
                     if file_name.endswith(".ome.tif"):
-                        if file_name.lower().contains("evo"): # double check evoked activity
+                        if "evo" in file_name.lower(): # double check evoked activity
                             print("The program skipped the evoked activity files")
                             continue
                         try:
