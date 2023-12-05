@@ -1435,7 +1435,7 @@ class Calcium(QWidget):
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
 
             # NOTE: include cell size in the summary text file
-            sum_file.write(f'Average Cell Size: {avg_cs}\n')
+            sum_file.write(f'Average Cell Size (um): {avg_cs}\n')
             sum_file.write(f'\tCell Size Standard Deviation: {std_cs}\n')
 
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
@@ -1889,7 +1889,7 @@ class Calcium(QWidget):
 
             # save cell size
             _, cs_arr = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
-            cs_field_name = ['ROI', 'cell size']
+            cs_field_name = ['ROI', 'cell size (um)']
             with open(save_path + cs_fname, 'w', newline='') as size_file:
                 writer = csv.writer(size_file)
                 writer.writerow(cs_field_name)
