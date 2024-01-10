@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 # import plotly.express as px
-import seaborn as sns
+# import seaborn as sns
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
@@ -641,7 +641,7 @@ class Calcium(QWidget):
 
     def calculate_background(self, f, window):
         '''
-        calculate the background fluorescence intensity based on the average of a specific number of 
+        calculate the background fluorescence intensity based on the average of a specific number of
             windows at the beginning
 
         parameters:
