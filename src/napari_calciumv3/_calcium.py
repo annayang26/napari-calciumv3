@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
+import pickle
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
@@ -23,6 +24,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 from scipy import ndimage as ndi
+from scipy import signal
 from skimage import feature, filters, morphology, segmentation
 
 if TYPE_CHECKING:
@@ -77,8 +79,6 @@ class Calcium(QWidget):
         self.median = None
         self.bg = None
         self.spike_times = None
-        self.max_correlations = None
-        self.max_cor_templates = None
         self.roi_analysis = None
         self.framerate = None
         self.mean_connect = None
@@ -270,9 +270,7 @@ class Calcium(QWidget):
         if self.label_layer:
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
             self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-
-            spike_templates_file = 'spikes.json'
-            self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.80)
+            self.spike_times = self.scipy_find_peaks(self.roi_dff)
             self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
@@ -535,84 +533,27 @@ class Calcium(QWidget):
             else:
                 self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
-    def find_peaks(self, roi_dff: dict, template_file: str, spk_threshold: float, reset_threshold: float) -> dict:
+    # scipy find peaks (the new method)
+    def scipy_find_peaks(self, roi_dff: dict, prom_pctg=0.35):
         '''
-        find the spikes from the fluorescence signals
+        using scipy.find_peaks for the peak detection instead of the old template-matching methods
 
-        parameters:
+        parameter:
         --------------
-        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
-        template_file: str. the template file for spikes
-        spk_threshold: float. threshold for determining if the spike \
-            is correlated with the template
-        reset_threshold: float. threshold for reseting the peak finding
+        roi_diff: dict. dictionary of label (int) - dff (dff at each frame) pair
+        prom_pct: float. prominence to use in the find_peaks method
 
         returns:
-        --------------
-        spike_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
-
+        -------------
+        spike_times: dict. label(int) - spike frame (list) pair
         '''
-        # open the template file
-        f = importlib.resources.open_text(__package__, template_file)
-        spike_templates = json.load(f)
         spike_times = {}
-        max_correlations = {}
-        max_cor_templates = {}
-        max_temp_len = max([len(temp) for temp in spike_templates.values()])
+        for roi in roi_dff:
+            prominence = np.mean(roi_dff[roi]) * prom_pctg
+            peaks, _ = signal.find_peaks(roi_dff[roi], prominence=prominence)
+            spike_times[roi] = list(peaks)
 
-        # calculate the corelation between the dff of one label at each frame
-        #   with each of the template
-        # iterate through each label
-        for r in roi_dff:
-            m = np.zeros((len(roi_dff[r]), len(spike_templates)))
-            roi_dff_pad = np.pad(roi_dff[r], (0, (max_temp_len - 1)), mode='constant')
-            for spike_template_index, spk_temp in enumerate(spike_templates):
-                for i in range(len(roi_dff[r])):
-                    p = np.corrcoef(roi_dff_pad[i:(i + len(spike_templates[spk_temp]))],
-                                    spike_templates[spk_temp])
-                    m[i, spike_template_index] = p[0, 1]
-
-            spike_times[r] = []
-            spike_correlations = np.max(m, axis=1)
-            max_correlations[r] = spike_correlations
-            max_cor_templates[r] = np.argmax(m, axis=1) + 1
-
-            j = 0
-            # iterate through frame in one label
-            while j < len(spike_correlations):
-                if spike_correlations[j] > spk_threshold:
-                    s_max = j
-                    loop = True
-
-                    # find the frame for the peak
-                    # iterate through the correlation between each pixel with the temp
-                    while loop:
-                        while spike_correlations[j + 1] > reset_threshold:
-                            if spike_correlations[j + 1] > spike_correlations[s_max]:
-                                s_max = j + 1
-                            j += 1
-                        if spike_correlations[j + 2] > reset_threshold:
-                            j += 1
-                        else:
-                            loop = False
-
-                    # find the amplitude
-                    window_start = max(0, (s_max - 5))
-                    window_end = min((len(roi_dff[r]) - 1), (s_max + 15))
-                    window = roi_dff[r][window_start:window_end]
-                    peak_height = np.max(window) - np.min(window)
-                    if peak_height > 0.02:
-                        spike_times[r].append(s_max)
-                j += 1
-
-            # the consecutive peaks should not be closer in frame
-            if len(spike_times[r]) >= 2:
-                for k in range(len(spike_times[r]) - 1):
-                    if spike_times[r][k] is not None and \
-                        (spike_times[r][k + 1] - spike_times[r][k]) <= 10:
-                            spike_times[r][k + 1] = None
-                spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
-        return spike_times, max_correlations, max_cor_templates
+        return spike_times
 
     def analyze_ROI(self, roi_dff: dict, spk_times: dict):
         '''
@@ -845,20 +786,20 @@ class Calcium(QWidget):
 
         returns:
         --------------
-        IEI: dict. label (int)- IEI_time or IEI_frame (float) 
+        iei: dict. label (int)- IEI_time or IEI_frame (float)
         '''
-        IEI = {}
+        iei = {}
         for r in spk_times:
-            IEI[r] = []
+            iei[r] = []
 
             if len(spk_times[r]) > 1:
-                IEI_frames = np.mean(np.diff(np.array(spk_times[r])))
+                iei_frames = np.mean(np.diff(np.array(spk_times[r])))
                 if framerate:
-                    IEI_time = IEI_frames / framerate # in seconds
-                    IEI[r].append(IEI_time)
+                    iei_time = iei_frames / framerate # in seconds
+                    iei[r].append(iei_time)
                 else:
-                    IEI[r].append(IEI_frames)
-        return IEI
+                    iei[r].append(iei_frames)
+        return iei
 
     def analyze_active(self, spk_times: dict):
         '''
@@ -1042,7 +983,7 @@ class Calcium(QWidget):
 
             # signal corrected based on the background signal
             # columns = number of segmented ROIs
-            # rows (shape= num of frames) = corrected signals based on 
+            # rows (shape= num of frames) = corrected signals based on
             #   the background signal at each frame for each ROI
             dff_signal = np.zeros([len(self.roi_dff[list(self.roi_dff.keys())[0]]), len(self.roi_dff)])
             for i, r in enumerate(self.roi_dff):
@@ -1063,12 +1004,12 @@ class Calcium(QWidget):
                 json.dump(self.bg, bg_file, indent="")
 
             # the label-frame of peaks pairs
-            with open(save_path + '/spike_times.json', 'w') as spike_file:
-                json.dump(self.spike_times, spike_file, indent="")
+            with open(save_path + '/spike_times.pkl', 'wb') as spike_file:
+                pickle.dump(self.spike_times, spike_file)
 
             # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + '/roi_analysis.json', 'w') as analysis_file:
-                json.dump(self.roi_analysis, analysis_file, indent="")
+            with open(save_path + '/roi_analysis.pkl', 'wb') as analysis_file:
+                pickle.dump(self.roi_analysis, analysis_file)
 
             # num_events for each labeled ROI
             # first column: ROI number
@@ -1097,30 +1038,6 @@ class Calcium(QWidget):
                 sum_text.extend([[f'Framerate: {frame_info}']])
                 writer.writerows(sum_text)
 
-            # label with the maximum correlation withs one of the spike templates
-            max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
-                                len(self.max_correlations)])
-            for i, r in enumerate(self.max_correlations):
-                max_cor[:, i] = self.max_correlations[r]
-
-            with open(save_path + '/max_correlations.csv', 'w', newline='') as cor_file:
-                writer = csv.writer(cor_file)
-                writer.writerow(self.max_correlations.keys())
-                for i in range(max_cor.shape[0]):
-                    writer.writerow(max_cor[i, :])
-
-            # label-index of the spike template with the maximum correlation pair
-            max_cor_temps = np.zeros([len(self.max_cor_templates[list(self.max_cor_templates.keys())[0]]),
-                                      len(self.max_cor_templates)])
-            for i, r in enumerate(self.max_cor_templates):
-                max_cor_temps[:, i] = self.max_cor_templates[r]
-
-            with open(save_path + '/max_cor_templates.csv', 'w', newline='') as cor_temp_file:
-                writer = csv.writer(cor_temp_file)
-                writer.writerow(self.max_cor_templates.keys())
-                for i in range(max_cor_temps.shape[0]):
-                    writer.writerow(max_cor_temps[i, :])
-
             self.canvas_traces.print_png(save_path + '/traces.png')
             self.canvas_just_traces.print_png(save_path + '/traces_no_detections.png')
 
@@ -1141,8 +1058,8 @@ class Calcium(QWidget):
                 center = np.mean(roi_coords, axis=0)
                 roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
-            with open(save_path + '/roi_centers.json', 'w') as roi_file:
-                json.dump(roi_centers, roi_file, indent="")
+            with open(save_path + '/roi_centers.pkl', 'wb') as roi_file:
+                pickle.dump(roi_centers, roi_file)
 
             # save cell size
             _, cs_arr = self.save_cell_size(self.roi_dict)
@@ -1337,8 +1254,6 @@ class Calcium(QWidget):
         self.median = None
         self.bg = None
         self.spike_times = None
-        self.max_correlations = None
-        self.max_cor_templates = None
         self.roi_analysis = None
         self.framerate = None
         self.mean_connect = None
@@ -1395,32 +1310,30 @@ class Calcium(QWidget):
                         # stimulated cells
                         roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
                         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-                        st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
+                        st_spike_times = self.scipy_find_peaks(roi_dff_st)
                         roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
                         self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
 
                         # unstimulated cells
                         roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
                         roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-                        nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
+                        nst_spike_times = self.scipy_find_peaks(roi_dff_nst)
                         roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
                         self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
 
                         # calculate connetivity
                         self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
                         self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                        self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
+                        self.spike_times = self.scipy_find_peaks(self.roi_dff)
                         self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
                         self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                         self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
 
                         self.save_files()
                         self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                            st_spike_times, roi_analysis_st, st_max_correlation,
-                                            st_max_cor_temp, st_roi, st_layer, st_label)
+                                            st_spike_times, roi_analysis_st, st_roi, st_layer, st_label)
                         self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
-                                            nst_spike_times, roi_analysis_nst, nst_max_correlation,
-                                            nst_max_cor_temp, nst_roi, nst_layer, nst_label)
+                                            nst_spike_times, roi_analysis_nst, nst_roi, nst_layer, nst_label)
 
                     # clear
                     self.clear()
@@ -1541,8 +1454,7 @@ class Calcium(QWidget):
         return st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer
 
     def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
-                          roi_analysis, max_correlations, max_cor_templates,
-                          roi_dict, layer, labels) -> None:
+                          roi_analysis, roi_dict, layer, labels) -> None:
         '''
         save the analysis files for evoked activity
         '''
@@ -1560,8 +1472,6 @@ class Calcium(QWidget):
             spike_fname = '/spike_times_st.json' if st else '/spike_times_nst.json'
             roi_analysis_fname = '/roi_analysis_st.json' if st else '/roi_analysis_nst.json'
             num_e_fname = '/num_events_st.csv' if st else '/num_events_nst.csv'
-            max_cor_fname = '/max_correlations_st.csv' if st else '/max_correlations_nst.csv'
-            max_cor_temp_fname = '/max_cor_templates_st.csv' if st else '/max_cor_templates_nst.csv'
             roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
             summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
@@ -1619,29 +1529,6 @@ class Calcium(QWidget):
                 sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
                 sum_text.extend([[f'Framerate: {frame_info}']])
                 writer.writerows(sum_text)
-
-            max_cor = np.zeros([len(max_correlations[list(max_correlations.keys())[0]]),
-                    len(max_correlations)])
-            for i, r in enumerate(max_correlations):
-                max_cor[:, i] = max_correlations[r]
-
-            with open(save_path + max_cor_fname, 'w', newline='') as cor_file:
-                writer = csv.writer(cor_file)
-                writer.writerow(max_correlations.keys())
-                for i in range(max_cor.shape[0]):
-                    writer.writerow(max_cor[i, :])
-
-            # label-index of the spike template with the maximum correlation pair
-            max_cor_temps = np.zeros([len(max_cor_templates[list(max_cor_templates.keys())[0]]),
-                                      len(max_cor_templates)])
-            for i, r in enumerate(max_cor_templates):
-                max_cor_temps[:, i] = max_cor_templates[r]
-
-            with open(save_path + max_cor_temp_fname, 'w', newline='') as cor_temp_file:
-                writer = csv.writer(cor_temp_file)
-                writer.writerow(max_cor_templates.keys())
-                for i in range(max_cor_temps.shape[0]):
-                    writer.writerow(max_cor_temps[i, :])
 
             # save the traces of two groups
             if st:
