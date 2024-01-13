@@ -966,6 +966,7 @@ class Calcium(QWidget):
             # create the folder
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
+                print(f'files saved in {save_path}')
 
             # Raw signal
             # columns = number of segmented ROIs
