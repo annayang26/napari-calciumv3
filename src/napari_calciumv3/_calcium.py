@@ -645,17 +645,20 @@ class Calcium(QWidget):
                                 subsearching = True
                                 negative_count = 0
 
-                                while subsearching and (start_index + 1 < self.img_stack.shape[0]):
+                                while subsearching:
                                     start_index += 1
-                                    print(f'start_index: {start_index}')
-                                    if dff_deriv[start_index] < 0:
-                                        negative_count += 1
+                                    if start_index < len(dff_deriv):
+                                        if dff_deriv[start_index] < 0:
+                                            negative_count += 1
 
+                                        else:
+                                            negative_count = 0
+
+                                        if negative_count == neg_reset_num:
+                                            subsearching = False
                                     else:
-                                        negative_count = 0
-
-                                    if negative_count == neg_reset_num:
                                         subsearching = False
+
                                 break
 
                             # if the difference is below threshold
