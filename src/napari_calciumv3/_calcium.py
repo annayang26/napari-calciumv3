@@ -148,7 +148,9 @@ class Calcium(QWidget):
 
                         self._on_click()
                         self.save_files()
+                        print("tried")
                     except IndexError:
+                        print("index error")
                         pass
                     self.clear()
 
