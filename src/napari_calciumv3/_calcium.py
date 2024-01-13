@@ -144,11 +144,8 @@ class Calcium(QWidget):
                     # print("self img stack: ", self.img_stack.shape)
                     # print("self img path ", self.img_path)
                     # print("self img name: ", self.img_name)
-                    try:
-                        self._on_click()
-                        self.save_files()
-                    except IndexError:
-                        print("No ROIs detected")
+                    self._on_click()
+                    self.save_files()
                     self.clear()
 
             print(f'{folder_path} is done batch processing/inspected')
