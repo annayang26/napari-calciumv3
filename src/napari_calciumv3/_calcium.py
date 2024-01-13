@@ -124,34 +124,31 @@ class Calcium(QWidget):
             print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
+                    file_path = os.path.join(folder_path, file_name)
+                    print(f'Analyzing {file_name}')
+                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.viewer.add_image(img, name=file_name)
+
+                    self.img_stack = self.viewer.layers[0].data
+                    self.img_path = file_path
+                    self.img_name = file_name
+
+                    # only initiate the trained model once
+                    if not self.unet_init:
+                        img_size = self.img_stack.shape[-1]
+                        dir_path = os.path.dirname(os.path.realpath(__file__))
+                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                        self.unet_init = True
+
+                    # print("self img stack: ", self.img_stack.shape)
+                    # print("self img path ", self.img_path)
+                    # print("self img name: ", self.img_name)
                     try:
-                        file_path = os.path.join(folder_path, file_name)
-                        print(f'Analyzing {file_name}')
-                        img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                        self.viewer.add_image(img, name=file_name)
-
-                        self.img_stack = self.viewer.layers[0].data
-                        self.img_path = file_path
-                        self.img_name = file_name
-
-                        # only initiate the trained model once
-                        if not self.unet_init:
-                            img_size = self.img_stack.shape[-1]
-                            dir_path = os.path.dirname(os.path.realpath(__file__))
-                            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                            self.unet_init = True
-
-                        # print("self img stack: ", self.img_stack.shape)
-                        # print("self img path ", self.img_path)
-                        # print("self img name: ", self.img_name)
-
                         self._on_click()
                         self.save_files()
-                        print("tried")
                     except IndexError:
-                        print("index error")
-                        pass
+                        print("No ROIs detected")
                     self.clear()
 
             print(f'{folder_path} is done batch processing/inspected')
