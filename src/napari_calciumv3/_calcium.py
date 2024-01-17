@@ -2,11 +2,11 @@ import csv
 import importlib.resources
 import json
 import os
+import pickle
 from typing import TYPE_CHECKING
 
 import cv2
 import numpy as np
-import pickle
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
@@ -1307,7 +1307,6 @@ class Calcium(QWidget):
                     # to group the cells in the stimulated area vs not in the stimulated area
                     if self.label_layer:
                         st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
-                        spike_templates_file = 'spikes.json'
                         # stimulated cells
                         roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
                         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
@@ -1470,10 +1469,10 @@ class Calcium(QWidget):
             raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
             dff_fname = '/dff_st.csv' if st else '/dff_nst.csv'
             median_fname = '/medians_st.json' if st else '/medians_nst.json'
-            spike_fname = '/spike_times_st.json' if st else '/spike_times_nst.json'
-            roi_analysis_fname = '/roi_analysis_st.json' if st else '/roi_analysis_nst.json'
+            spike_fname = '/spike_times_st.pkl' if st else '/spike_times_nst.pkl'
+            roi_analysis_fname = '/roi_analysis_st.pkl' if st else '/roi_analysis_nst.pkl'
             num_e_fname = '/num_events_st.csv' if st else '/num_events_nst.csv'
-            roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
+            roi_center_fname = '/roi_centers_st.pkl' if st else '/roi_centers_nst.pkl'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
             summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
             cs_fname = '/roi_size_st.csv' if st else '/roi_size_nst.csv'
@@ -1503,11 +1502,11 @@ class Calcium(QWidget):
                 json.dump(median, median_file, indent="")
 
             # the label-frame of peaks pairs
-            with open(save_path + spike_fname, 'w') as spike_file:
-                json.dump(spike_times, spike_file, indent="")
+            with open(save_path + spike_fname, 'wb') as spike_file:
+                pickle.dump(spike_times, spike_file)
             # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + roi_analysis_fname, 'w') as analysis_file:
-                json.dump(roi_analysis, analysis_file, indent="")
+            with open(save_path + roi_analysis_fname, 'wb') as analysis_file:
+                pickle.dump(roi_analysis, analysis_file)
 
             # num of events and frequency
             num_events = np.zeros((len(spike_times.keys()), 3))
@@ -1560,8 +1559,8 @@ class Calcium(QWidget):
                 center = np.mean(roi_coords, axis=0)
                 roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
-            with open(save_path + roi_center_fname, 'w') as roi_file:
-                json.dump(roi_centers, roi_file, indent="")
+            with open(save_path + roi_center_fname, 'wb') as roi_file:
+                pickle.dump(roi_centers, roi_file)
 
             # save cell size
             _, cs_arr = self.save_cell_size(roi_dict)
