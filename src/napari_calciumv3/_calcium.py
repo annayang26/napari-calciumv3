@@ -585,7 +585,6 @@ class Calcium(QWidget):
                 if line.startswith('"Nosepiece-Label": '):
                     words = line[19:-1].strip('\"').split(" ")
                     objective = int([word for word in words if word.endswith("x")][0][:-1])
-                    print(objective)
                     obj = True
                 if fr and bn and ps and obj:
                     break
