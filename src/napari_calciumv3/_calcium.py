@@ -584,8 +584,8 @@ class Calcium(QWidget):
                     ps = True
                 if line.startswith('"Nosepiece-Label": '):
                     words = line[19:-1].strip('\"').split(" ")
-                    print(words)
-                    objective = [word for word in words if word.endswith("x")][0][:-1]
+                    objective = int([word for word in words if word.endswith("x")][0][:-1])
+                    print(objective)
                     obj = True
                 if fr and bn and ps and obj:
                     break
@@ -1092,7 +1092,7 @@ class Calcium(QWidget):
 
             # save cell size
             _, cs_arr = self.save_cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
-            cs_field_name = ['ROI', 'cell size']
+            cs_field_name = ['ROI', 'cell size (um)']
             with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
                 writer = csv.writer(size_file)
                 writer.writerow(cs_field_name)
