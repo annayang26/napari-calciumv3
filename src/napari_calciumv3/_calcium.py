@@ -583,7 +583,7 @@ class Calcium(QWidget):
                     pixel_size = float(line[15:-1])
                     ps = True
                 if line.startswith('"Nosepiece-Label": '):
-                    words = line[19:-1].strip().split(" ")
+                    words = line[19:-1].strip('\"').split(" ")
                     print(words)
                     objective = [word for word in words if word.endswith("x")][0][:-1]
                     obj = True
