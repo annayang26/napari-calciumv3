@@ -84,6 +84,9 @@ class Calcium(QWidget):
         self.mean_connect = None
         self.img_path = None
         self.colors = []
+        self.binning = None
+        self.objective = None
+        self.pixel_size = None
 
         # batch process
         self.batch_process = False
@@ -201,7 +204,7 @@ class Calcium(QWidget):
         for dir_name in dir_list:
             with open(dir_name + "/" + file_name) as file:
                 data = {}
-                data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+                data['name'] = dir_name.split(os.path.sep)[-1]
                 lines = file.readlines()
                 # find the variable in the file
                 for line in lines:
@@ -267,7 +270,8 @@ class Calcium(QWidget):
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
             self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
             self.spike_times = self.scipy_find_peaks(self.roi_dff)
-            self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+            self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
+            self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
@@ -551,7 +555,43 @@ class Calcium(QWidget):
 
         return spike_times
 
-    def analyze_ROI(self, roi_dff: dict, spk_times: dict):
+    def extract_metadata(self)->float:
+        '''
+        extract information from the metadata
+        '''
+        metadata_file = self.img_path[0:-8] + '_metadata.txt'
+        framerate = 0
+        fr = False
+        bn = False
+        obj = False
+        ps = False
+
+        if os.path.exists(metadata_file):
+            with open(metadata_file) as f:
+                metadata = f.readlines()
+
+            for line in metadata:
+                line = line.strip()
+                if line.startswith('"Exposure-ms": '):
+                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
+                    framerate = 1 / exposure  # frames/second
+                    fr = True
+                if line.startswith('"Binning": '):
+                    binning = int(line[11:-1])
+                    bn = True
+                if line.startswith('"PixelSizeUm": '):
+                    pixel_size = float(line[15:-1])
+                    ps = True
+                if line.startswith('"Nosepiece-Label": '):
+                    words = line[19:-1].strip().split(" ")
+                    objective = [word for word in words if word.endswith("x")][0][:-1]
+                    obj = True
+                if fr and bn and ps and obj:
+                    break
+
+        return framerate, binning, pixel_size, objective
+
+    def analyze_ROI(self, roi_dff: dict, spk_times: dict, framerate):
         '''
         to analyze the labeled ROI
 
@@ -566,19 +606,6 @@ class Calcium(QWidget):
             base_indices, spike_times, time_to_rise, max_slope)
         framerate: float. 1/ exposure
         '''
-        metadata_file = self.img_path[0:-8] + '_metadata.txt'
-        framerate = 0
-
-        if os.path.exists(metadata_file):
-            with open(metadata_file) as f:
-                metadata = f.readlines()
-
-            for line in metadata:
-                line = line.strip()
-                if line.startswith('"Exposure-ms": '):
-                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
-                    framerate = 1 / exposure  # frames/second
-                    break
 
         amplitude_info = self.get_amplitude(roi_dff, spk_times)
         time_to_rise = self.get_time_to_rise(amplitude_info, framerate)
@@ -592,7 +619,7 @@ class Calcium(QWidget):
             roi_analysis[r]['max_slope'] = max_slope[r]
             roi_analysis[r]['IEI'] = IEI[r]
 
-        return roi_analysis, framerate
+        return roi_analysis
 
     def get_amplitude(self, roi_dff: dict, spk_times: dict, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
         '''
@@ -1063,7 +1090,7 @@ class Calcium(QWidget):
                 pickle.dump(roi_centers, roi_file)
 
             # save cell size
-            _, cs_arr = self.save_cell_size(self.roi_dict)
+            _, cs_arr = self.save_cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
             cs_field_name = ['ROI', 'cell size']
             with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
                 writer = csv.writer(size_file)
@@ -1092,7 +1119,7 @@ class Calcium(QWidget):
         ------------
         save_path: str.  the prefix of the tif file name
         '''
-        _, cs_arr = self.save_cell_size(roi_dict)
+        _, cs_arr = self.save_cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
         avg_cs = float(np.mean(cs_arr, axis=0)[1])
         std_cs = float(np.std(cs_arr, axis=0)[1])
 
@@ -1148,7 +1175,7 @@ class Calcium(QWidget):
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
 
             # NOTE: include cell size in the summary text file
-            sum_file.write(f'Average Cell Size: {avg_cs}\n')
+            sum_file.write(f'Average Cell Size(um): {avg_cs}\n')
             sum_file.write(f'\tCell Size Standard Deviation: {std_cs}\n')
 
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
@@ -1180,7 +1207,7 @@ class Calcium(QWidget):
             if not evk_group:
                 sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
-    def save_cell_size(self, roi_dict) -> dict:
+    def save_cell_size(self, roi_dict: dict, binning: int, pixel_size: float, objective:int) -> dict:
         '''
         calculate the cell size of each labeled cell
 
@@ -1194,7 +1221,7 @@ class Calcium(QWidget):
         '''
         cs_dict = {}
         for r in roi_dict:
-            cs_dict[r] = len(roi_dict[r])
+            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective
 
         cs_arr = np.array(list(cs_dict.items()))
 
@@ -1260,6 +1287,8 @@ class Calcium(QWidget):
         self.mean_connect = None
         self.img_path = None
         self.colors = []
+        self.binning = None
+        self.objective = None
 
         self.axes.cla()
         self.canvas_traces.draw_idle()
@@ -1307,25 +1336,26 @@ class Calcium(QWidget):
                     # to group the cells in the stimulated area vs not in the stimulated area
                     if self.label_layer:
                         st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
+                        self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
                         # stimulated cells
                         roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
                         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
                         st_spike_times = self.scipy_find_peaks(roi_dff_st)
-                        roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+                        roi_analysis_st = self.analyze_ROI(roi_dff_st, st_spike_times, self.framerate)
                         self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
 
                         # unstimulated cells
                         roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
                         roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
                         nst_spike_times = self.scipy_find_peaks(roi_dff_nst)
-                        roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                        roi_analysis_nst = self.analyze_ROI(roi_dff_nst, nst_spike_times, self.framerate)
                         self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
 
                         # calculate connetivity
                         self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
                         self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
                         self.spike_times = self.scipy_find_peaks(self.roi_dff)
-                        self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+                        self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
                         self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                         self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
 
@@ -1563,8 +1593,8 @@ class Calcium(QWidget):
                 pickle.dump(roi_centers, roi_file)
 
             # save cell size
-            _, cs_arr = self.save_cell_size(roi_dict)
-            cs_field_name = ['ROI', 'cell size']
+            _, cs_arr = self.save_cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
+            cs_field_name = ['ROI', 'cell size (um)']
             with open(save_path + cs_fname, 'w', newline='') as size_file:
                 writer = csv.writer(size_file)
                 writer.writerow(cs_field_name)
