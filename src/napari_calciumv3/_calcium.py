@@ -614,7 +614,7 @@ class Calcium(QWidget):
         roi_analysis = amplitude_info
 
         for r in roi_analysis:
-            roi_analysis[r]['spike_times'] = spk_times[r]
+            # roi_analysis[r]['spike_times'] = spk_times[r]
             roi_analysis[r]['time_to_rise'] = time_to_rise[r]
             roi_analysis[r]['max_slope'] = max_slope[r]
             roi_analysis[r]['IEI'] = IEI[r]
@@ -1036,35 +1036,8 @@ class Calcium(QWidget):
                 pickle.dump(self.spike_times, spike_file)
 
             # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + '/roi_analysis.pkl', 'wb') as analysis_file:
-                pickle.dump(self.roi_analysis, analysis_file)
-
-            # num_events for each labeled ROI
-            # first column: ROI number
-            # second column: num of events
-            # third column: frequency (num events/frames or exposure )
-            num_events = np.zeros((len(self.spike_times.keys()), 3))
-            active_roi = 0
-            frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(self.spike_times):
-                num_e = len(self.spike_times[r])
-                if num_e > 0:
-                    active_roi += 1
-                num_events[i, 0] = r
-                num_events[i, 1] = num_e
-                num_events[i, 2] = num_e / frame_info
-
-            with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
-                writer = csv.writer(num_event_file, dialect="excel")
-                if self.framerate:
-                    fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
-                else:
-                    fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
-                writer.writerow(fields)
-                writer.writerows(num_events)
-                sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
-                sum_text.extend([[f'Framerate: {frame_info}']])
-                writer.writerows(sum_text)
+            # with open(save_path + '/roi_analysis.pkl', 'wb') as analysis_file:
+            #     pickle.dump(self.roi_analysis, analysis_file)
 
             self.canvas_traces.print_png(save_path + '/traces.png')
             self.canvas_just_traces.print_png(save_path + '/traces_no_detections.png')
@@ -1089,13 +1062,50 @@ class Calcium(QWidget):
             with open(save_path + '/roi_centers.pkl', 'wb') as roi_file:
                 pickle.dump(roi_centers, roi_file)
 
+            cs_dict, _ = self.save_cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
+            roi_data = self.all_roi_data(self.roi_analysis, cs_dict, self.spike_times, self.framerate, self.img_stack.shape[0])
+            with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
+                writer = csv.writer(roi_data_file, dialect='excel')
+                fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
+                        'amplitude', 'time to rise', 'max slope', 'interevent interval']
+                writer.writerow(fields)
+                writer.writerows(roi_data)
+
             # save cell size
-            _, cs_arr = self.save_cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
-            cs_field_name = ['ROI', 'cell size (um)']
-            with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
-                writer = csv.writer(size_file)
-                writer.writerow(cs_field_name)
-                writer.writerows(cs_arr)
+            # _, cs_arr = self.save_cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
+            # cs_field_name = ['ROI', 'cell size (um)']
+            # with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
+            #     writer = csv.writer(size_file)
+            #     writer.writerow(cs_field_name)
+            #     writer.writerows(cs_arr)
+
+            # num_events for each labeled ROI
+            # first column: ROI number
+            # second column: num of events
+            # third column: frequency (num events/frames or exposure )
+            # num_events = np.zeros((len(self.spike_times.keys()), 3))
+            # active_roi = 0
+            # frame_info = self.img_stack.shape[0]/self.framerate
+            # # frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
+            # for i, r in enumerate(self.spike_times):
+            #     num_e = len(self.spike_times[r])
+            #     if num_e > 0:
+            #         active_roi += 1
+            #     num_events[i, 0] = r
+            #     num_events[i, 1] = num_e
+            #     num_events[i, 2] = num_e / frame_info
+
+            # with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
+            #     writer = csv.writer(num_event_file, dialect="excel")
+            #     if self.framerate:
+            #         fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
+            #     else:
+            #         fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
+            #     writer.writerow(fields)
+            #     writer.writerows(num_events)
+            #     sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
+            #     sum_text.extend([[f'Framerate: {frame_info}']])
+            #     writer.writerows(sum_text)
 
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
@@ -1221,11 +1231,47 @@ class Calcium(QWidget):
         '''
         cs_dict = {}
         for r in roi_dict:
-            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective
+            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective # pixel to um
 
         cs_arr = np.array(list(cs_dict.items()))
 
         return cs_dict, cs_arr
+
+    def all_roi_data(self, roi_analysis: dict, cell_size: dict, spk_times: dict, framerate: float, total_frames: int) -> list:
+        '''
+        to compile data for all the ROIs (including non-active ones) in one file
+
+        parameters:
+        ------------
+        roi_analysis: dict. ROI - amplitude, peak_indices, base_indices, time_to_rise, max_slope, IEI
+        cell_size: dict. ROI- cell size in um
+        spk_times: dict. ROI- peak indices
+        framerate: float. frames per second
+        total_frames: int. total frames recorded
+
+        return:
+        -----------
+        roi_data: Array. the cell_size, num_events, frequency, amplitude, time_to_rise, max_slope, IEI of each ROI in the recording
+        '''
+        num_roi = len(roi_analysis.keys())
+        if len(cell_size.keys()) == num_roi and len(spk_times.keys()) == num_roi:
+            roi_data = np.zeros((num_roi, 8))
+            recording_time = total_frames/framerate
+
+            for i, r in enumerate(roi_analysis):
+                roi_data[i, 0] = r
+                roi_data[i, 1] = cell_size[i]
+                num_e = len(spk_times[r])
+                roi_data[i, 2] = num_e
+                roi_data[i, 3] = num_e / recording_time
+                roi_data[i, 4] = roi_analysis[r]['amplitude']
+                roi_data[i, 5] = roi_analysis[r]['time_to_rise']
+                roi_data[i, 6] = roi_analysis[r]['max_slope']
+                roi_data[i, 7] = roi_analysis[r]['IEI']
+        else:
+            print('please make sure that the number of ROIs in each dictionary is the same')
+
+        return roi_data
 
     # Taken from napari-calcium plugin by Federico Gasparoli
     def general_msg(self, message_1: str, message_2: str) -> None:
