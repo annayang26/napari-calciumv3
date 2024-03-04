@@ -13,7 +13,7 @@ import tensorflow.keras.backend as K
 import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
-from PIL import Image
+from PIL import Image, ImageDraw
 from qtpy.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -991,14 +991,14 @@ class Calcium(QWidget):
     def add_num_to_img(self, img, roi_dict):
         # the centers of each ROI
         roi_centers = {}
-        img_w_num = img.copy()
+
         for roi_number, roi_coords in roi_dict.items():
             center = np.mean(roi_coords, axis=0)
             roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
+        img_w_num = img.copy()
         for r in roi_dict:
-            cv2.putText(img_w_num, str(r), roi_centers[r], fontFace=cv2.FONT_HERSHEY_SIMPLEX,
-                                    fontScale=1, color=(255, 255, 255))
+            ImageDraw.Draw(img_w_num).text(roi_centers[r], str(r), (255, 255, 255))
 
         return img_w_num
 
