@@ -13,7 +13,7 @@ import tensorflow.keras.backend as K
 import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 from qtpy.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -998,7 +998,12 @@ class Calcium(QWidget):
 
         img_w_num = img.copy()
         for r in roi_dict:
-            ImageDraw.Draw(img_w_num).text(roi_centers[r], str(r), (255, 255, 255))
+            draw = ImageDraw.Draw(img_w_num)
+            font = ImageFont.truetype('segoeui.ttf', 8)
+            pos = roi_centers[r]
+            bbox = draw.textbbox(pos, str(r), font=font)
+            draw.rectangle(bbox, fill="grey")
+            draw.text(pos, str(r), font=font, fill="white")
 
         return img_w_num
 
