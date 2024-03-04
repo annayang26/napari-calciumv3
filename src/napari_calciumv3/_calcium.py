@@ -512,9 +512,11 @@ class Calcium(QWidget):
                 colors_to_plot.append(self.colors[i])
 
         if len(roi_to_plot) > 0:
-            self.axes.set_prop_cycle(color=colors_to_plot)
-            self.axes_just_traces.set_prop_cycle(color=colors_to_plot)
+
             num_roi_to_plot = self._random_pick(roi_to_plot, 10)
+            new_colors = colors_to_plot[num_roi_to_plot]
+            self.axes.set_prop_cycle(color=new_colors)
+            self.axes_just_traces.set_prop_cycle(color=new_colors)
 
             dff_max = np.zeros(len(num_roi_to_plot))
             for dff_index, dff_key in enumerate(num_roi_to_plot):
@@ -545,6 +547,7 @@ class Calcium(QWidget):
         num_f = np.min([num, len(og_list)])
         final_list = random.sample(og_list, num_f)
         final_list.sort()
+
         return final_list
 
     # scipy find peaks (the new method)
@@ -999,10 +1002,10 @@ class Calcium(QWidget):
         img_w_num = img.copy()
         for r in roi_dict:
             draw = ImageDraw.Draw(img_w_num)
-            font = ImageFont.truetype('segoeui.ttf', 8)
+            font = ImageFont.truetype('segoeui.ttf', 12)
             pos = roi_centers[r]
             bbox = draw.textbbox(pos, str(r), font=font)
-            draw.rectangle(bbox, fill="grey")
+            draw.rectangle(bbox, fill=" dark grey")
             draw.text(pos, str(r), font=font, fill="white")
 
         return img_w_num
