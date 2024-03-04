@@ -991,12 +991,13 @@ class Calcium(QWidget):
     def add_num_to_img(self, img, roi_dict):
         # the centers of each ROI
         roi_centers = {}
+        img_w_num = img.copy()
         for roi_number, roi_coords in roi_dict.items():
             center = np.mean(roi_coords, axis=0)
             roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
         for r in roi_dict:
-            img_w_num = cv2.putText(img, str(r), roi_centers[r], fontFace=cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img_w_num, str(r), roi_centers[r], fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                                     fontScale=1, color=(255, 255, 255))
 
         return img_w_num
@@ -1073,7 +1074,7 @@ class Calcium(QWidget):
                 i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-            self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
+            # self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
