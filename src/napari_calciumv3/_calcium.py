@@ -988,6 +988,18 @@ class Calcium(QWidget):
 
         return phase # Python list
 
+    def add_num_to_img(self, img, roi_dict):
+        # the centers of each ROI
+        roi_centers = {}
+        for roi_number, roi_coords in roi_dict.items():
+            center = np.mean(roi_coords, axis=0)
+            roi_centers[roi_number] = (int(center[0]), int(center[1]))
+
+        for r in roi_dict:
+            img_w_num = cv2.putText(img, str(r), roi_centers[r], color='white')
+
+        return img_w_num
+
     def save_files(self) -> None:
         '''
         to generate files for the analysis on the image
@@ -1064,7 +1076,8 @@ class Calcium(QWidget):
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
-            bk_im.save(save_path + '/ROIs.png')
+            bk_im_num = self.add_num_to_img(bk_im, self.roi_dict)
+            bk_im_num.save(save_path + '/ROIs.png')
 
             # the centers of each ROI
             roi_centers = {}
