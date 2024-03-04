@@ -521,15 +521,17 @@ class Calcium(QWidget):
                 dff_max[dff_index] = np.max(dff[dff_key])
             height_increment = max(dff_max)
 
+            y_pos = []
             for height_index, d in enumerate(num_roi_to_plot):
+                y_pos.append(height_index * (1.2 * height_increment))
                 self.axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                 self.axes.plot(dff[d] + height_index * (1.2 * height_increment))
                 if len(spike_times[d]) > 0:
                     self.axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
                                    ms=2, color='k', marker='o', ls='')
-                    self.axes.set_yticks(height_index * (1.2 * height_increment), labels=num_roi_to_plot)
                 self.canvas_traces.draw_idle()
                 self.canvas_just_traces.draw_idle()
+            self.axes.set_yticks(y_pos, labels=num_roi_to_plot)
         else:
             if self.batch_process:
                 print(f'No calcium events were detected for any ROIs in <{self.img_name}>')
