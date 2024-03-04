@@ -514,19 +514,20 @@ class Calcium(QWidget):
         if len(roi_to_plot) > 0:
             self.axes.set_prop_cycle(color=colors_to_plot)
             self.axes_just_traces.set_prop_cycle(color=colors_to_plot)
+            num_roi_to_plot = self._random_pick(roi_to_plot, 10)
 
-
-            dff_max = np.zeros(len(roi_to_plot))
-            for dff_index, dff_key in enumerate(roi_to_plot):
+            dff_max = np.zeros(len(num_roi_to_plot))
+            for dff_index, dff_key in enumerate(num_roi_to_plot):
                 dff_max[dff_index] = np.max(dff[dff_key])
             height_increment = max(dff_max)
 
-            for height_index, d in enumerate(roi_to_plot):
+            for height_index, d in enumerate(num_roi_to_plot):
                 self.axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                 self.axes.plot(dff[d] + height_index * (1.2 * height_increment))
                 if len(spike_times[d]) > 0:
                     self.axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
                                    ms=2, color='k', marker='o', ls='')
+                    self.axes.set_yticks(dff[d][spike_times[d]] + height_index * (1.2 * height_increment), labels=num_roi_to_plot)
                 self.canvas_traces.draw_idle()
                 self.canvas_just_traces.draw_idle()
         else:
@@ -534,6 +535,15 @@ class Calcium(QWidget):
                 print(f'No calcium events were detected for any ROIs in <{self.img_name}>')
             else:
                 self.general_msg('No activity', 'No calcium events were detected for any ROI')
+
+    def _random_pick(self, og_list, num):
+        '''
+        to randomly pick num of roi to plot the calcium traces
+        '''
+        num_f = np.min([num, len(og_list)])
+        final_list = random.sample(og_list, num_f)
+        final_list.sort()
+        return final_list
 
     # scipy find peaks (the new method)
     def scipy_find_peaks(self, roi_dff: dict, prom_pctg=0.35):
@@ -612,14 +622,15 @@ class Calcium(QWidget):
         amplitude_info = self.get_amplitude(roi_dff, spk_times)
         time_to_rise = self.get_time_to_rise(amplitude_info, framerate)
         max_slope = self.get_max_slope(roi_dff, amplitude_info)
-        IEI = self.analyze_IEI(spk_times, framerate)
+        iei = self.analyze_IEI(spk_times, framerate)
         roi_analysis = amplitude_info
 
         for r in roi_analysis:
             # roi_analysis[r]['spike_times'] = spk_times[r]
             roi_analysis[r]['time_to_rise'] = time_to_rise[r]
             roi_analysis[r]['max_slope'] = max_slope[r]
-            roi_analysis[r]['IEI'] = IEI[r]
+            roi_analysis[r]['IEI'] = iei[r]
+            print(iei[r])
 
         return roi_analysis
 
@@ -822,12 +833,15 @@ class Calcium(QWidget):
             iei[r] = []
 
             if len(spk_times[r]) > 1:
-                iei_frames = np.mean(np.diff(np.array(spk_times[r])))
+                # iei_frames = np.mean(np.diff(np.array(spk_times[r])))
+                iei_frames = np.diff(np.array(spk_times[r]))
                 if framerate:
-                    iei_time = iei_frames / framerate # in seconds
-                    iei[r].append(iei_time)
+                    # iei_time = iei_frames / framerate # in seconds
+                    # iei[r].append(iei_time)
+                    iei[r] = iei_frames / framerate # in seconds
                 else:
-                    iei[r].append(iei_frames)
+                    iei[r] = iei_frames
+                    # iei[r].append(iei_frames)
         return iei
 
     def analyze_active(self, spk_times: dict):
@@ -1069,8 +1083,8 @@ class Calcium(QWidget):
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
-                        'average amplitude', '', 'average time to rise',
-                        'average max slope', 'InterEvent Interval']
+                        'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
+                        'average max slope', 'max slope SEM',  'InterEvent Interval']
                 writer.writerow(fields)
                 writer.writerows(roi_data)
 
@@ -1600,8 +1614,8 @@ class Calcium(QWidget):
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
-                        'average amplitude', 'average time to rise',
-                        'average max slope', 'InterEvent Interval']
+                        'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
+                        'average max slope', 'max slope SEM',  'InterEvent Interval']
                 writer.writerow(fields)
                 writer.writerows(roi_data)
 
