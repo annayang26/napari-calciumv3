@@ -548,7 +548,7 @@ class Calcium(QWidget):
         final_list.sort()
         new_color = []
         for index in final_list:
-            new_color.append(color_list[index])
+            new_color.append(color_list[index-1])
 
         return final_list, new_color
 
