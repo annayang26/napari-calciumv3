@@ -512,9 +512,8 @@ class Calcium(QWidget):
                 colors_to_plot.append(self.colors[i])
 
         if len(roi_to_plot) > 0:
+            num_roi_to_plot, new_colors = self._random_pick(roi_to_plot, colors_to_plot, 10)
 
-            num_roi_to_plot = self._random_pick(roi_to_plot, 10)
-            new_colors = colors_to_plot[num_roi_to_plot]
             self.axes.set_prop_cycle(color=new_colors)
             self.axes_just_traces.set_prop_cycle(color=new_colors)
 
@@ -540,15 +539,18 @@ class Calcium(QWidget):
             else:
                 self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
-    def _random_pick(self, og_list, num):
+    def _random_pick(self, og_list, color_list, num):
         '''
         to randomly pick num of roi to plot the calcium traces
         '''
         num_f = np.min([num, len(og_list)])
         final_list = random.sample(og_list, num_f)
         final_list.sort()
+        new_color = []
+        for index in final_list:
+            new_color.append(color_list[index])
 
-        return final_list
+        return final_list, new_color
 
     # scipy find peaks (the new method)
     def scipy_find_peaks(self, roi_dff: dict, prom_pctg=0.35):
