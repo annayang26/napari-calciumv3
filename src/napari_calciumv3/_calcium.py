@@ -527,7 +527,7 @@ class Calcium(QWidget):
                 if len(spike_times[d]) > 0:
                     self.axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
                                    ms=2, color='k', marker='o', ls='')
-                    self.axes.set_yticks(dff[d][spike_times[d]] + height_index * (1.2 * height_increment), labels=num_roi_to_plot)
+                    self.axes.set_yticks(height_index * (1.2 * height_increment), labels=num_roi_to_plot)
                 self.canvas_traces.draw_idle()
                 self.canvas_just_traces.draw_idle()
         else:
@@ -630,7 +630,6 @@ class Calcium(QWidget):
             roi_analysis[r]['time_to_rise'] = time_to_rise[r]
             roi_analysis[r]['max_slope'] = max_slope[r]
             roi_analysis[r]['IEI'] = iei[r]
-            print(iei[r])
 
         return roi_analysis
 
@@ -833,15 +832,11 @@ class Calcium(QWidget):
             iei[r] = []
 
             if len(spk_times[r]) > 1:
-                # iei_frames = np.mean(np.diff(np.array(spk_times[r])))
                 iei_frames = np.diff(np.array(spk_times[r]))
                 if framerate:
-                    # iei_time = iei_frames / framerate # in seconds
-                    # iei[r].append(iei_time)
                     iei[r] = iei_frames / framerate # in seconds
                 else:
                     iei[r] = iei_frames
-                    # iei[r].append(iei_frames)
         return iei
 
     def analyze_active(self, spk_times: dict):
