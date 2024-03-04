@@ -1264,7 +1264,7 @@ class Calcium(QWidget):
                 num_e = len(spk_times[r])
                 roi_data[i, 2] = num_e
                 roi_data[i, 3] = num_e / recording_time
-                roi_data[i, 4] = roi_analysis[r]['amplitude']
+                roi_data[i, 4] = roi_analysis[r]['amplitudes']
                 roi_data[i, 5] = roi_analysis[r]['time_to_rise']
                 roi_data[i, 6] = roi_analysis[r]['max_slope']
                 roi_data[i, 7] = roi_analysis[r]['IEI']
