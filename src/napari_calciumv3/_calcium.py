@@ -1067,8 +1067,8 @@ class Calcium(QWidget):
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
-                        'average amplitude', 'amplitudes', 'average time to rise', 'time to rise',
-                        'average max slope', 'max slope', 'InterEvent Interval']
+                        'average amplitude', 'average time to rise',
+                        'average max slope', 'InterEvent Interval']
                 writer.writerow(fields)
                 writer.writerows(roi_data)
 
@@ -1256,7 +1256,7 @@ class Calcium(QWidget):
         '''
         num_roi = len(roi_analysis.keys())
         if len(cell_size.keys()) == num_roi and len(spk_times.keys()) == num_roi:
-            roi_data = np.zeros((num_roi, 11))
+            roi_data = np.zeros((num_roi, 8))
             recording_time = total_frames/framerate
 
             for i, r in enumerate(roi_analysis):
@@ -1267,12 +1267,12 @@ class Calcium(QWidget):
                 roi_data[i, 3] = num_e / recording_time
                 ## TODO: 3/4: how to best save these data on a time series
                 roi_data[i, 4] = np.mean(roi_analysis[r]['amplitudes'])
-                roi_data[i, 5] = [roi_analysis[r]['amplitudes']]
-                roi_data[i, 6] = np.mean(roi_analysis[r]['time_to_rise'])
-                roi_data[i, 7] = roi_analysis[r]['time_to_rise']
-                roi_data[i, 8] = np.mean(roi_analysis[r]['max_slope'])
-                roi_data[i, 9] = roi_analysis[r]['max_slope']
-                roi_data[i, 10] = roi_analysis[r]['IEI']
+                # roi_data[i, 5] = roi_analysis[r]['amplitudes']
+                roi_data[i, 5] = np.mean(roi_analysis[r]['time_to_rise'])
+                # roi_data[i, 7] = roi_analysis[r]['time_to_rise']
+                roi_data[i, 6] = np.mean(roi_analysis[r]['max_slope'])
+                # roi_data[i, 9] = roi_analysis[r]['max_slope']
+                roi_data[i, 7] = roi_analysis[r]['IEI']
         else:
             print('please make sure that the number of ROIs in each dictionary is the same')
 
