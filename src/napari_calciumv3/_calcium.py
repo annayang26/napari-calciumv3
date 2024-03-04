@@ -1289,8 +1289,7 @@ class Calcium(QWidget):
                 roi_data[i, 9] = stats.sem(roi_analysis[r]['max_slope'])
                 # roi_data[i, 9] = roi_analysis[r]['max_slope']
                 roi_data[i, 10] = np.mean(roi_analysis[r]['IEI'])
-                iei_sem = stats.sem(roi_analysis[r]['IEI'])
-                roi_data[i, 11] = iei_sem if iei_sem.isdigit() else 0
+                roi_data[i, 11] = stats.sem(roi_analysis[r]['IEI'], nan_policy='omit')
         else:
             print('please make sure that the number of ROIs in each dictionary is the same')
 
