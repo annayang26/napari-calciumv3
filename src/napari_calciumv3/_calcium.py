@@ -994,7 +994,7 @@ class Calcium(QWidget):
 
         for roi_number, roi_coords in roi_dict.items():
             center = np.mean(roi_coords, axis=0)
-            roi_centers[roi_number] = (int(center[0]), int(center[1]))
+            roi_centers[roi_number] = (int(center[1]), int(center[0]))
 
         img_w_num = img.copy()
         for r in roi_dict:
