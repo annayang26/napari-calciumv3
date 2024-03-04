@@ -1081,7 +1081,7 @@ class Calcium(QWidget):
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
                         'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
-                        'average max slope', 'max slope SEM',  'InterEvent Interval']
+                        'average max slope', 'max slope SEM',  'InterEvent Interval', 'IEI SEM']
                 writer.writerow(fields)
                 writer.writerows(roi_data)
 
@@ -1289,7 +1289,8 @@ class Calcium(QWidget):
                 roi_data[i, 9] = stats.sem(roi_analysis[r]['max_slope'])
                 # roi_data[i, 9] = roi_analysis[r]['max_slope']
                 roi_data[i, 10] = np.mean(roi_analysis[r]['IEI'])
-                roi_data[i, 11] = stats.sem(roi_analysis[r]['IEI'])
+                iei_sem = stats.sem(roi_analysis[r]['IEI'])
+                roi_data[i, 11] = iei_sem if iei_sem.isdigit() else 0
         else:
             print('please make sure that the number of ROIs in each dictionary is the same')
 
@@ -1612,7 +1613,7 @@ class Calcium(QWidget):
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
                         'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
-                        'average max slope', 'max slope SEM',  'InterEvent Interval']
+                        'average max slope', 'max slope SEM',  'InterEvent Interval', 'IEI SEM']
                 writer.writerow(fields)
                 writer.writerows(roi_data)
 
