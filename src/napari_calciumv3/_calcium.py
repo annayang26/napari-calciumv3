@@ -1272,7 +1272,7 @@ class Calcium(QWidget):
                 # roi_data[i, 7] = roi_analysis[r]['time_to_rise']
                 roi_data[i, 6] = np.mean(roi_analysis[r]['max_slope'])
                 # roi_data[i, 9] = roi_analysis[r]['max_slope']
-                roi_data[i, 7] = roi_analysis[r]['IEI']
+                roi_data[i, 7] = np.mean(roi_analysis[r]['IEI'])
         else:
             print('please make sure that the number of ROIs in each dictionary is the same')
 
