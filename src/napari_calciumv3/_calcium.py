@@ -1007,7 +1007,7 @@ class Calcium(QWidget):
             font = ImageFont.truetype('segoeui.ttf', 12)
             pos = roi_centers[r]
             bbox = draw.textbbox(pos, str(r), font=font)
-            draw.rectangle(bbox, fill=" dark grey")
+            draw.rectangle(bbox, fill="grey")
             draw.text(pos, str(r), font=font, fill="white")
 
         return img_w_num
