@@ -996,7 +996,7 @@ class Calcium(QWidget):
             roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
         for r in roi_dict:
-            img_w_num = cv2.putText(img, str(r), roi_centers[r], color='white')
+            img_w_num = cv2.putText(img, str(r), roi_centers[r], fontFace=cv2.FONT_HERSHEY_SIMPLEX, color='white')
 
         return img_w_num
 
