@@ -1260,7 +1260,7 @@ class Calcium(QWidget):
 
             for i, r in enumerate(roi_analysis):
                 roi_data[i, 0] = r
-                roi_data[i, 1] = cell_size[i]
+                roi_data[i, 1] = cell_size[r]
                 num_e = len(spk_times[r])
                 roi_data[i, 2] = num_e
                 roi_data[i, 3] = num_e / recording_time
