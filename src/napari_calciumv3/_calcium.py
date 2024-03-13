@@ -547,10 +547,9 @@ class Calcium(QWidget):
         final_list = random.sample(og_list, num_f)
         final_list.sort()
         new_color = []
-        print(f"length of the color list: {len(color_list)}")
-        for index in final_list:
-            print(f"index: {index}, length of the new color list: {len(new_color)}")
-            new_color.append(color_list[index-1])
+        for i, index in enumerate(og_list):
+            if index in final_list:
+                new_color.append(color_list[i])
 
         return final_list, new_color
 
