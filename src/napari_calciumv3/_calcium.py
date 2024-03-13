@@ -1027,11 +1027,7 @@ class Calcium(QWidget):
         '''
         if self.roi_dict:
             save_path = self.img_path[0:-8]
-            today = date.today().strftime("%y/%m/%d")
-
-            # delete previous analysis file
-            if os.path.isdir(save_path):
-                os.rmdir(save_path)
+            today = date.today().strftime("%y%m%d")
 
             # add date to the folder generated
             save_path = save_path + "_" + today
