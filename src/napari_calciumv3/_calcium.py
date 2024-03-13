@@ -91,7 +91,7 @@ class Calcium(QWidget):
 
         # batch process
         self.batch_process = False
-        self.unet_init = False
+        self.model_size = 0
         # batch process (evoked)
         self.blue_file = None
         self.ca_file = None
@@ -137,13 +137,14 @@ class Calcium(QWidget):
                     self.img_path = file_path
                     self.img_name = file_name
 
+                    img_size = self.img_stack.shape[-1]
+
                     # only initiate the trained model once
-                    if not self.unet_init:
-                        img_size = self.img_stack.shape[-1]
+                    if self.model_size != img_size:
                         dir_path = os.path.dirname(os.path.realpath(__file__))
                         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                        self.unet_init = True
+                        self.model_size = img_size
 
                     # print("self img stack: ", self.img_stack.shape)
                     # print("self img path ", self.img_path)
@@ -158,7 +159,7 @@ class Calcium(QWidget):
                 self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
             # reset the model
             self.model_unet = None
-            self.unet_init = False
+            self.model_size = 0
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
@@ -1376,13 +1377,13 @@ class Calcium(QWidget):
                     self.img_name = file_name
                     print(f'Analyzing {file_name}')
 
+                    img_size = self.img_stack.shape[-1]
                     # only initiate the trained model once
-                    if not self.unet_init:
-                        img_size = self.img_stack.shape[-1]
+                    if self.model_size != img_size:
                         dir_path = os.path.dirname(os.path.realpath(__file__))
                         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                        self.unet_init = True
+                        self.model_size = img_size
 
                     # produce the prediction and labeled layers
                     background_layer = 0
@@ -1433,7 +1434,7 @@ class Calcium(QWidget):
             self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
 
             self.model_unet = None
-            self.unet_init = False
+            self.model_size = 0
 
             print(f'{folder_path} is done batch processing/inspected')
 
