@@ -1428,7 +1428,7 @@ class Calcium(QWidget):
                     self.nst_colors = []
                     self.st_axes.cla()
                     self.nst_axes.cla()
-
+            print(f"folder path: {folder_path}")
             self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
             self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
             self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
@@ -1545,12 +1545,16 @@ class Calcium(QWidget):
         '''
         save the analysis files for evoked activity
         '''
-        if self.roi_dict:
+        if len(roi_signal) > 0:
             save_path = self.img_path[0:-8]
+            today = date.today().strftime("%y%m%d")
+
+            # add date to the folder generated
+            save_path = save_path + "_" + today
             group_name = 'stimulated' if st else 'non_stimulated'
             save_path = os.path.join(save_path, group_name)
 
-            if not os.path.isdir(save_path):
+            if not os.path.exists(save_path):
                 os.mkdir(save_path)
 
             raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
@@ -1637,6 +1641,10 @@ class Calcium(QWidget):
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
 
+        else:
+            group = "stimulated" if st else "non-stimulated"
+            print(f"No rois found in {group} group")
+
     def evoked_traces(self, st, dff, labels, layer, spike_times) -> None:
         '''
         '''
@@ -1658,18 +1666,20 @@ class Calcium(QWidget):
             self.nst_colors = colors
 
         if len(roi_to_plot) > 0:
-            dff_max = np.zeros(len(roi_to_plot))
-            for dff_index, dff_key in enumerate(roi_to_plot):
+            num_roi_to_plot, new_colors = self._random_pick(roi_to_plot, colors_to_plot, 10)
+
+            dff_max = np.zeros(len(num_roi_to_plot))
+            for dff_index, dff_key in enumerate(num_roi_to_plot):
                 dff_max[dff_index] = np.max(dff[dff_key])
             height_increment = max(dff_max)
 
+            y_pos = []
             if st:
-                st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-                st_axes = st_canvas_traces.figure.subplots()
-                st_axes.set_prop_cycle(color=colors_to_plot)
-                self.st_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+                self.st_axes.set_prop_cycle(color=new_colors)
+                self.st_axes_just_traces.set_prop_cycle(color=new_colors)
 
-                for height_index, d in enumerate(roi_to_plot):
+                for height_index, d in enumerate(num_roi_to_plot):
+                    y_pos.append(height_index * (1.2 * height_increment))
                     self.st_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                     self.st_axes.plot(dff[d] + height_index * (1.2 * height_increment))
                     if len(spike_times[d]) > 0:
@@ -1677,11 +1687,14 @@ class Calcium(QWidget):
                                     ms=2, color='k', marker='o', ls='')
                     self.st_canvas_traces.draw_idle()
                     self.st_canvas_just_traces.draw_idle()
-            else:
-                self.nst_axes.set_prop_cycle(color=colors_to_plot)
-                self.nst_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+                self.st_axes.set_yticks(y_pos, labels=num_roi_to_plot)
 
-                for height_index, d in enumerate(roi_to_plot):
+            else:
+                self.nst_axes.set_prop_cycle(color=new_colors)
+                self.nst_axes_just_traces.set_prop_cycle(color=new_colors)
+
+                for height_index, d in enumerate(num_roi_to_plot):
+                    y_pos.append(height_index * (1.2 * height_increment))
                     self.nst_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                     self.nst_axes.plot(dff[d] + height_index * (1.2 * height_increment))
                     if len(spike_times[d]) > 0:
@@ -1689,6 +1702,7 @@ class Calcium(QWidget):
                                     ms=2, color='k', marker='o', ls='')
                     self.nst_canvas_traces.draw_idle()
                     self.nst_canvas_just_traces.draw_idle()
+                self.nst_axes.set_yticks(y_pos, labels=num_roi_to_plot)
         else:
             print(f'{self.img_path} has no calcium events were detected for any ROI')
 
