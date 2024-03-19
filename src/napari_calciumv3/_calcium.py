@@ -2,8 +2,10 @@ import csv
 import importlib.resources
 import json
 import os
+import pickle
 from typing import TYPE_CHECKING
-
+import random
+from datetime import date
 import cv2
 import numpy as np
 import tensorflow as tf
@@ -11,7 +13,7 @@ import tensorflow.keras.backend as K
 import tifffile as tff
 from matplotlib.backends.backend_qt5agg import FigureCanvas
 from matplotlib.figure import Figure
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from qtpy.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -23,6 +25,7 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 from scipy import ndimage as ndi
+from scipy import signal, stats
 from skimage import feature, filters, morphology, segmentation
 
 if TYPE_CHECKING:
@@ -77,17 +80,18 @@ class Calcium(QWidget):
         self.median = None
         self.bg = None
         self.spike_times = None
-        self.max_correlations = None
-        self.max_cor_templates = None
         self.roi_analysis = None
         self.framerate = None
         self.mean_connect = None
         self.img_path = None
         self.colors = []
+        self.binning = None
+        self.objective = None
+        self.pixel_size = None
 
         # batch process
         self.batch_process = False
-        self.unet_init = False
+        self.model_size = 0
         # batch process (evoked)
         self.blue_file = None
         self.ca_file = None
@@ -124,32 +128,29 @@ class Calcium(QWidget):
             print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
-                    try:
-                        file_path = os.path.join(folder_path, file_name)
-                        print(f'Analyzing {file_name}')
-                        img = tff.imread(file_path, is_ome=False, is_mmstack=False)
-                        self.viewer.add_image(img, name=file_name)
+                    file_path = os.path.join(folder_path, file_name)
+                    print(f'Analyzing {file_name}')
+                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    self.viewer.add_image(img, name=file_name)
 
-                        self.img_stack = self.viewer.layers[0].data
-                        self.img_path = file_path
-                        self.img_name = file_name
+                    self.img_stack = self.viewer.layers[0].data
+                    self.img_path = file_path
+                    self.img_name = file_name
 
-                        # only initiate the trained model once
-                        if not self.unet_init:
-                            img_size = self.img_stack.shape[-1]
-                            dir_path = os.path.dirname(os.path.realpath(__file__))
-                            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                            self.unet_init = True
+                    img_size = self.img_stack.shape[-1]
 
-                        # print("self img stack: ", self.img_stack.shape)
-                        # print("self img path ", self.img_path)
-                        # print("self img name: ", self.img_name)
+                    # only initiate the trained model once
+                    if self.model_size != img_size:
+                        dir_path = os.path.dirname(os.path.realpath(__file__))
+                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                        self.model_size = img_size
 
-                        self._on_click()
-                        self.save_files()
-                    except IndexError:
-                        pass
+                    # print("self img stack: ", self.img_stack.shape)
+                    # print("self img path ", self.img_path)
+                    # print("self img name: ", self.img_name)
+                    self._on_click()
+                    self.save_files()
                     self.clear()
 
             print(f'{folder_path} is done batch processing/inspected')
@@ -158,7 +159,7 @@ class Calcium(QWidget):
                 self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
             # reset the model
             self.model_unet = None
-            self.unet_init = False
+            self.model_size = 0
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
@@ -205,7 +206,7 @@ class Calcium(QWidget):
         for dir_name in dir_list:
             with open(dir_name + "/" + file_name) as file:
                 data = {}
-                data['name'] = dir_name.split(os.path.sep)[-1][:-4]
+                data['name'] = dir_name.split(os.path.sep)[-1]
                 lines = file.readlines()
                 # find the variable in the file
                 for line in lines:
@@ -270,10 +271,9 @@ class Calcium(QWidget):
         if self.label_layer:
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
             self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-
-            spike_templates_file = 'spikes.json'
-            self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.80)
-            self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+            self.spike_times = self.scipy_find_peaks(self.roi_dff)
+            self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
+            self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
             self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
@@ -513,15 +513,19 @@ class Calcium(QWidget):
                 colors_to_plot.append(self.colors[i])
 
         if len(roi_to_plot) > 0:
-            self.axes.set_prop_cycle(color=colors_to_plot)
-            self.axes_just_traces.set_prop_cycle(color=colors_to_plot)
+            num_roi_to_plot, new_colors = self._random_pick(roi_to_plot, colors_to_plot, 10)
 
-            dff_max = np.zeros(len(roi_to_plot))
-            for dff_index, dff_key in enumerate(roi_to_plot):
+            self.axes.set_prop_cycle(color=new_colors)
+            self.axes_just_traces.set_prop_cycle(color=new_colors)
+
+            dff_max = np.zeros(len(num_roi_to_plot))
+            for dff_index, dff_key in enumerate(num_roi_to_plot):
                 dff_max[dff_index] = np.max(dff[dff_key])
             height_increment = max(dff_max)
 
-            for height_index, d in enumerate(roi_to_plot):
+            y_pos = []
+            for height_index, d in enumerate(num_roi_to_plot):
+                y_pos.append(height_index * (1.2 * height_increment))
                 self.axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                 self.axes.plot(dff[d] + height_index * (1.2 * height_increment))
                 if len(spike_times[d]) > 0:
@@ -529,92 +533,86 @@ class Calcium(QWidget):
                                    ms=2, color='k', marker='o', ls='')
                 self.canvas_traces.draw_idle()
                 self.canvas_just_traces.draw_idle()
+            self.axes.set_yticks(y_pos, labels=num_roi_to_plot)
         else:
             if self.batch_process:
                 print(f'No calcium events were detected for any ROIs in <{self.img_name}>')
             else:
                 self.general_msg('No activity', 'No calcium events were detected for any ROI')
 
-    def find_peaks(self, roi_dff: dict, template_file: str, spk_threshold: float, reset_threshold: float) -> dict:
+    def _random_pick(self, og_list, color_list, num):
         '''
-        find the spikes from the fluorescence signals
+        to randomly pick num of roi to plot the calcium traces
+        '''
+        num_f = np.min([num, len(og_list)])
+        final_list = random.sample(og_list, num_f)
+        final_list.sort()
+        new_color = []
+        for i, index in enumerate(og_list):
+            if index in final_list:
+                new_color.append(color_list[i])
 
-        parameters:
+        return final_list, new_color
+
+    # scipy find peaks (the new method)
+    def scipy_find_peaks(self, roi_dff: dict, prom_pctg=0.35):
+        '''
+        using scipy.find_peaks for the peak detection instead of the old template-matching methods
+
+        parameter:
         --------------
-        roi_dff: dict. a dictionary of label (int)-dff (dff at each frame) pair
-        template_file: str. the template file for spikes
-        spk_threshold: float. threshold for determining if the spike \
-            is correlated with the template
-        reset_threshold: float. threshold for reseting the peak finding
+        roi_diff: dict. dictionary of label (int) - dff (dff at each frame) pair
+        prom_pct: float. prominence to use in the find_peaks method
 
         returns:
-        --------------
-        spike_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
-
+        -------------
+        spike_times: dict. label(int) - spike frame (list) pair
         '''
-        # open the template file
-        f = importlib.resources.open_text(__package__, template_file)
-        spike_templates = json.load(f)
         spike_times = {}
-        max_correlations = {}
-        max_cor_templates = {}
-        max_temp_len = max([len(temp) for temp in spike_templates.values()])
+        for roi in roi_dff:
+            prominence = np.mean(roi_dff[roi]) * prom_pctg
+            peaks, _ = signal.find_peaks(roi_dff[roi], prominence=prominence)
+            spike_times[roi] = list(peaks)
 
-        # calculate the corelation between the dff of one label at each frame
-        #   with each of the template
-        # iterate through each label
-        for r in roi_dff:
-            m = np.zeros((len(roi_dff[r]), len(spike_templates)))
-            roi_dff_pad = np.pad(roi_dff[r], (0, (max_temp_len - 1)), mode='constant')
-            for spike_template_index, spk_temp in enumerate(spike_templates):
-                for i in range(len(roi_dff[r])):
-                    p = np.corrcoef(roi_dff_pad[i:(i + len(spike_templates[spk_temp]))],
-                                    spike_templates[spk_temp])
-                    m[i, spike_template_index] = p[0, 1]
+        return spike_times
 
-            spike_times[r] = []
-            spike_correlations = np.max(m, axis=1)
-            max_correlations[r] = spike_correlations
-            max_cor_templates[r] = np.argmax(m, axis=1) + 1
+    def extract_metadata(self)->float:
+        '''
+        extract information from the metadata
+        '''
+        metadata_file = self.img_path[0:-8] + '_metadata.txt'
+        framerate = 0
+        fr = False
+        bn = False
+        obj = False
+        ps = False
 
-            j = 0
-            # iterate through frame in one label
-            while j < len(spike_correlations):
-                if spike_correlations[j] > spk_threshold:
-                    s_max = j
-                    loop = True
+        if os.path.exists(metadata_file):
+            with open(metadata_file) as f:
+                metadata = f.readlines()
 
-                    # find the frame for the peak
-                    # iterate through the correlation between each pixel with the temp
-                    while loop:
-                        while spike_correlations[j + 1] > reset_threshold:
-                            if spike_correlations[j + 1] > spike_correlations[s_max]:
-                                s_max = j + 1
-                            j += 1
-                        if spike_correlations[j + 2] > reset_threshold:
-                            j += 1
-                        else:
-                            loop = False
+            for line in metadata:
+                line = line.strip()
+                if line.startswith('"Exposure-ms": '):
+                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
+                    framerate = 1 / exposure  # frames/second
+                    fr = True
+                if line.startswith('"Binning": '):
+                    binning = int(line[11:-1])
+                    bn = True
+                if line.startswith('"PixelSizeUm": '):
+                    pixel_size = float(line[15:-1])
+                    ps = True
+                if line.startswith('"Nosepiece-Label": '):
+                    words = line[19:-1].strip('\"').split(" ")
+                    objective = int([word for word in words if word.endswith("x")][0][:-1])
+                    obj = True
+                if fr and bn and ps and obj:
+                    break
 
-                    # find the amplitude
-                    window_start = max(0, (s_max - 5))
-                    window_end = min((len(roi_dff[r]) - 1), (s_max + 15))
-                    window = roi_dff[r][window_start:window_end]
-                    peak_height = np.max(window) - np.min(window)
-                    if peak_height > 0.02:
-                        spike_times[r].append(s_max)
-                j += 1
+        return framerate, binning, pixel_size, objective
 
-            # the consecutive peaks should not be closer in frame
-            if len(spike_times[r]) >= 2:
-                for k in range(len(spike_times[r]) - 1):
-                    if spike_times[r][k] is not None and \
-                        (spike_times[r][k + 1] - spike_times[r][k]) <= 10:
-                            spike_times[r][k + 1] = None
-                spike_times[r] = [spk for spk in spike_times[r] if spk is not None]
-        return spike_times, max_correlations, max_cor_templates
-
-    def analyze_ROI(self, roi_dff: dict, spk_times: dict):
+    def analyze_ROI(self, roi_dff: dict, spk_times: dict, framerate):
         '''
         to analyze the labeled ROI
 
@@ -629,33 +627,20 @@ class Calcium(QWidget):
             base_indices, spike_times, time_to_rise, max_slope)
         framerate: float. 1/ exposure
         '''
-        metadata_file = self.img_path[0:-8] + '_metadata.txt'
-        framerate = 0
-
-        if os.path.exists(metadata_file):
-            with open(metadata_file) as f:
-                metadata = f.readlines()
-
-            for line in metadata:
-                line = line.strip()
-                if line.startswith('"Exposure-ms": '):
-                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
-                    framerate = 1 / exposure  # frames/second
-                    break
 
         amplitude_info = self.get_amplitude(roi_dff, spk_times)
         time_to_rise = self.get_time_to_rise(amplitude_info, framerate)
         max_slope = self.get_max_slope(roi_dff, amplitude_info)
-        IEI = self.analyze_IEI(spk_times, framerate)
+        iei = self.analyze_IEI(spk_times, framerate)
         roi_analysis = amplitude_info
 
         for r in roi_analysis:
-            roi_analysis[r]['spike_times'] = spk_times[r]
+            # roi_analysis[r]['spike_times'] = spk_times[r]
             roi_analysis[r]['time_to_rise'] = time_to_rise[r]
             roi_analysis[r]['max_slope'] = max_slope[r]
-            roi_analysis[r]['IEI'] = IEI[r]
+            roi_analysis[r]['IEI'] = iei[r]
 
-        return roi_analysis, framerate
+        return roi_analysis
 
     def get_amplitude(self, roi_dff: dict, spk_times: dict, deriv_threhold=0.01, reset_num=17, neg_reset_num=2, total_dist=40):
         '''
@@ -710,14 +695,18 @@ class Calcium(QWidget):
 
                                 while subsearching:
                                     start_index += 1
-                                    if dff_deriv[start_index] < 0:
-                                        negative_count += 1
+                                    if start_index < len(dff_deriv):
+                                        if dff_deriv[start_index] < 0:
+                                            negative_count += 1
 
+                                        else:
+                                            negative_count = 0
+
+                                        if negative_count == neg_reset_num:
+                                            subsearching = False
                                     else:
-                                        negative_count = 0
-
-                                    if negative_count == neg_reset_num:
                                         subsearching = False
+
                                 break
 
                             # if the difference is below threshold
@@ -845,20 +834,19 @@ class Calcium(QWidget):
 
         returns:
         --------------
-        IEI: dict. label (int)- IEI_time or IEI_frame (float) 
+        iei: dict. label (int)- IEI_time or IEI_frame (float)
         '''
-        IEI = {}
+        iei = {}
         for r in spk_times:
-            IEI[r] = []
+            iei[r] = []
 
             if len(spk_times[r]) > 1:
-                IEI_frames = np.mean(np.diff(np.array(spk_times[r])))
+                iei_frames = np.diff(np.array(spk_times[r]))
                 if framerate:
-                    IEI_time = IEI_frames / framerate # in seconds
-                    IEI[r].append(IEI_time)
+                    iei[r] = iei_frames / framerate # in seconds
                 else:
-                    IEI[r].append(IEI_frames)
-        return IEI
+                    iei[r] = iei_frames
+        return iei
 
     def analyze_active(self, spk_times: dict):
         '''
@@ -1007,6 +995,25 @@ class Calcium(QWidget):
 
         return phase # Python list
 
+    def add_num_to_img(self, img, roi_dict):
+        # the centers of each ROI
+        roi_centers = {}
+
+        for roi_number, roi_coords in roi_dict.items():
+            center = np.mean(roi_coords, axis=0)
+            roi_centers[roi_number] = (int(center[1]), int(center[0]))
+
+        img_w_num = img.copy()
+        for r in roi_dict:
+            draw = ImageDraw.Draw(img_w_num)
+            font = ImageFont.truetype('segoeui.ttf', 12)
+            pos = roi_centers[r]
+            bbox = draw.textbbox(pos, str(r), font=font)
+            draw.rectangle(bbox, fill="grey")
+            draw.text(pos, str(r), font=font, fill="white")
+
+        return img_w_num
+
     def save_files(self) -> None:
         '''
         to generate files for the analysis on the image
@@ -1021,10 +1028,14 @@ class Calcium(QWidget):
         '''
         if self.roi_dict:
             save_path = self.img_path[0:-8]
+            today = date.today().strftime("%y%m%d")
 
+            # add date to the folder generated
+            save_path = save_path + "_" + today
             # create the folder
             if not os.path.isdir(save_path):
                 os.mkdir(save_path)
+            print(f'files saved in {save_path}')
 
             # Raw signal
             # columns = number of segmented ROIs
@@ -1042,7 +1053,7 @@ class Calcium(QWidget):
 
             # signal corrected based on the background signal
             # columns = number of segmented ROIs
-            # rows (shape= num of frames) = corrected signals based on 
+            # rows (shape= num of frames) = corrected signals based on
             #   the background signal at each frame for each ROI
             dff_signal = np.zeros([len(self.roi_dff[list(self.roi_dff.keys())[0]]), len(self.roi_dff)])
             for i, r in enumerate(self.roi_dff):
@@ -1063,63 +1074,8 @@ class Calcium(QWidget):
                 json.dump(self.bg, bg_file, indent="")
 
             # the label-frame of peaks pairs
-            with open(save_path + '/spike_times.json', 'w') as spike_file:
-                json.dump(self.spike_times, spike_file, indent="")
-
-            # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + '/roi_analysis.json', 'w') as analysis_file:
-                json.dump(self.roi_analysis, analysis_file, indent="")
-
-            # num_events for each labeled ROI
-            # first column: ROI number
-            # second column: num of events
-            # third column: frequency (num events/frames or exposure )
-            num_events = np.zeros((len(self.spike_times.keys()), 3))
-            active_roi = 0
-            frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(self.spike_times):
-                num_e = len(self.spike_times[r])
-                if num_e > 0:
-                    active_roi += 1
-                num_events[i, 0] = r
-                num_events[i, 1] = num_e
-                num_events[i, 2] = num_e / frame_info
-
-            with open(save_path + '/num_events.csv', 'w', newline='') as num_event_file:
-                writer = csv.writer(num_event_file, dialect="excel")
-                if self.framerate:
-                    fields = ['ROI', 'Num_events', 'Frequency (num of events/s)']
-                else:
-                    fields = ['ROI', 'Num_events', 'Frequency (num of events/frame)']
-                writer.writerow(fields)
-                writer.writerows(num_events)
-                sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
-                sum_text.extend([[f'Framerate: {frame_info}']])
-                writer.writerows(sum_text)
-
-            # label with the maximum correlation withs one of the spike templates
-            max_cor = np.zeros([len(self.max_correlations[list(self.max_correlations.keys())[0]]),
-                                len(self.max_correlations)])
-            for i, r in enumerate(self.max_correlations):
-                max_cor[:, i] = self.max_correlations[r]
-
-            with open(save_path + '/max_correlations.csv', 'w', newline='') as cor_file:
-                writer = csv.writer(cor_file)
-                writer.writerow(self.max_correlations.keys())
-                for i in range(max_cor.shape[0]):
-                    writer.writerow(max_cor[i, :])
-
-            # label-index of the spike template with the maximum correlation pair
-            max_cor_temps = np.zeros([len(self.max_cor_templates[list(self.max_cor_templates.keys())[0]]),
-                                      len(self.max_cor_templates)])
-            for i, r in enumerate(self.max_cor_templates):
-                max_cor_temps[:, i] = self.max_cor_templates[r]
-
-            with open(save_path + '/max_cor_templates.csv', 'w', newline='') as cor_temp_file:
-                writer = csv.writer(cor_temp_file)
-                writer.writerow(self.max_cor_templates.keys())
-                for i in range(max_cor_temps.shape[0]):
-                    writer.writerow(max_cor_temps[i, :])
+            with open(save_path + '/spike_times.pkl', 'wb') as spike_file:
+                pickle.dump(self.spike_times, spike_file)
 
             self.canvas_traces.print_png(save_path + '/traces.png')
             self.canvas_just_traces.print_png(save_path + '/traces_no_detections.png')
@@ -1129,11 +1085,11 @@ class Calcium(QWidget):
                 i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
                 label_array[(i_coords[0], i_coords[1])] = self.colors[i - 1]
 
-            self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
-            bk_im.save(save_path + '/ROIs.png')
+            bk_im_num = self.add_num_to_img(bk_im, self.roi_dict)
+            bk_im_num.save(save_path + '/ROIs.png')
 
             # the centers of each ROI
             roi_centers = {}
@@ -1141,16 +1097,18 @@ class Calcium(QWidget):
                 center = np.mean(roi_coords, axis=0)
                 roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
-            with open(save_path + '/roi_centers.json', 'w') as roi_file:
-                json.dump(roi_centers, roi_file, indent="")
+            with open(save_path + '/roi_centers.pkl', 'wb') as roi_file:
+                pickle.dump(roi_centers, roi_file)
 
-            # save cell size
-            _, cs_arr = self.save_cell_size(self.roi_dict)
-            cs_field_name = ['ROI', 'cell size']
-            with open(save_path + '/roi_size.csv', 'w', newline='') as size_file:
-                writer = csv.writer(size_file)
-                writer.writerow(cs_field_name)
-                writer.writerows(cs_arr)
+            cs_dict, _ = self.cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
+            roi_data = self.all_roi_data(self.roi_analysis, cs_dict, self.spike_times, self.framerate, self.img_stack.shape[0])
+            with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
+                writer = csv.writer(roi_data_file, dialect='excel')
+                fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
+                        'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
+                        'average max slope', 'max slope SEM',  'InterEvent Interval', 'IEI SEM']
+                writer.writerow(fields)
+                writer.writerows(roi_data)
 
             # prediction layer
             self.prediction_layer.save(save_path + '/prediction.tif')
@@ -1167,14 +1125,14 @@ class Calcium(QWidget):
                          spike_times: dict, file_name: str, roi_dict: dict,
                          evk_group: bool) -> None:
         '''
-        to generate a summary of the graphs that include the average and std of 
+        to generate a summary of the graphs that include the average and std of
         amplitudes, time_to_rise, IEI, and mean connectivity
 
         parameters:
         ------------
         save_path: str.  the prefix of the tif file name
         '''
-        _, cs_arr = self.save_cell_size(roi_dict)
+        _, cs_arr = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
         avg_cs = float(np.mean(cs_arr, axis=0)[1])
         std_cs = float(np.std(cs_arr, axis=0)[1])
 
@@ -1230,7 +1188,7 @@ class Calcium(QWidget):
             sum_file.write(f'Percent Active ROI (%): {percent_active}\n')
 
             # NOTE: include cell size in the summary text file
-            sum_file.write(f'Average Cell Size: {avg_cs}\n')
+            sum_file.write(f'Average Cell Size(um): {avg_cs}\n')
             sum_file.write(f'\tCell Size Standard Deviation: {std_cs}\n')
 
             sum_file.write(f'Average Amplitude: {avg_amplitude}\n')
@@ -1262,7 +1220,7 @@ class Calcium(QWidget):
             if not evk_group:
                 sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
-    def save_cell_size(self, roi_dict) -> dict:
+    def cell_size(self, roi_dict: dict, binning: int, pixel_size: float, objective:int) -> dict:
         '''
         calculate the cell size of each labeled cell
 
@@ -1276,11 +1234,55 @@ class Calcium(QWidget):
         '''
         cs_dict = {}
         for r in roi_dict:
-            cs_dict[r] = len(roi_dict[r])
+            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective # pixel to um
 
         cs_arr = np.array(list(cs_dict.items()))
 
         return cs_dict, cs_arr
+
+    def all_roi_data(self, roi_analysis: dict, cell_size: dict, spk_times: dict, framerate: float, total_frames: int) -> list:
+        '''
+        to compile data for all the ROIs (including non-active ones) in one file
+
+        parameters:
+        ------------
+        roi_analysis: dict. ROI - amplitude, peak_indices, base_indices, time_to_rise, max_slope, IEI
+        cell_size: dict. ROI- cell size in um
+        spk_times: dict. ROI- peak indices
+        framerate: float. frames per second
+        total_frames: int. total frames recorded
+
+        return:
+        -----------
+        roi_data: Array. the cell_size, num_events, frequency, amplitude, time_to_rise, max_slope, IEI of each ROI in the recording
+        '''
+        num_roi = len(roi_analysis.keys())
+        if len(cell_size.keys()) == num_roi and len(spk_times.keys()) == num_roi:
+            roi_data = np.zeros((num_roi, 12))
+            recording_time = total_frames/framerate
+
+            for i, r in enumerate(roi_analysis):
+                roi_data[i, 0] = r
+                roi_data[i, 1] = cell_size[r]
+                num_e = len(spk_times[r])
+                roi_data[i, 2] = num_e
+                roi_data[i, 3] = num_e / recording_time
+                ## TODO: 3/4: how to best save these data on a time series
+                roi_data[i, 4] = np.mean(roi_analysis[r]['amplitudes'])
+                roi_data[i, 5] = stats.sem(roi_analysis[r]['amplitudes'])
+                # roi_data[i, 5] = roi_analysis[r]['amplitudes']
+                roi_data[i, 6] = np.mean(roi_analysis[r]['time_to_rise'])
+                roi_data[i, 7] = stats.sem(roi_analysis[r]['time_to_rise'])
+                # roi_data[i, 7] = roi_analysis[r]['time_to_rise']
+                roi_data[i, 8] = np.mean(roi_analysis[r]['max_slope'])
+                roi_data[i, 9] = stats.sem(roi_analysis[r]['max_slope'])
+                # roi_data[i, 9] = roi_analysis[r]['max_slope']
+                roi_data[i, 10] = np.mean(roi_analysis[r]['IEI'])
+                roi_data[i, 11] = stats.sem(roi_analysis[r]['IEI'], nan_policy='omit')
+        else:
+            print('please make sure that the number of ROIs in each dictionary is the same')
+
+        return roi_data
 
     # Taken from napari-calcium plugin by Federico Gasparoli
     def general_msg(self, message_1: str, message_2: str) -> None:
@@ -1337,13 +1339,13 @@ class Calcium(QWidget):
         self.median = None
         self.bg = None
         self.spike_times = None
-        self.max_correlations = None
-        self.max_cor_templates = None
         self.roi_analysis = None
         self.framerate = None
         self.mean_connect = None
         self.img_path = None
         self.colors = []
+        self.binning = None
+        self.objective = None
 
         self.axes.cla()
         self.canvas_traces.draw_idle()
@@ -1375,13 +1377,13 @@ class Calcium(QWidget):
                     self.img_name = file_name
                     print(f'Analyzing {file_name}')
 
+                    img_size = self.img_stack.shape[-1]
                     # only initiate the trained model once
-                    if not self.unet_init:
-                        img_size = self.img_stack.shape[-1]
+                    if self.model_size != img_size:
                         dir_path = os.path.dirname(os.path.realpath(__file__))
                         path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
                         self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                        self.unet_init = True
+                        self.model_size = img_size
 
                     # produce the prediction and labeled layers
                     background_layer = 0
@@ -1391,36 +1393,34 @@ class Calcium(QWidget):
                     # to group the cells in the stimulated area vs not in the stimulated area
                     if self.label_layer:
                         st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
-                        spike_templates_file = 'spikes.json'
+                        self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
                         # stimulated cells
                         roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
                         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-                        st_spike_times, st_max_correlation, st_max_cor_temp = self.find_peaks(roi_dff_st, spike_templates_file, 0.85, 0.8)
-                        roi_analysis_st, self.framerate = self.analyze_ROI(roi_dff_st, st_spike_times)
+                        st_spike_times = self.scipy_find_peaks(roi_dff_st)
+                        roi_analysis_st = self.analyze_ROI(roi_dff_st, st_spike_times, self.framerate)
                         self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
 
                         # unstimulated cells
                         roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
                         roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-                        nst_spike_times, nst_max_correlation, nst_max_cor_temp = self.find_peaks(roi_dff_nst, spike_templates_file, 0.85, 0.8)
-                        roi_analysis_nst, _ = self.analyze_ROI(roi_dff_nst, nst_spike_times)
+                        nst_spike_times = self.scipy_find_peaks(roi_dff_nst)
+                        roi_analysis_nst = self.analyze_ROI(roi_dff_nst, nst_spike_times, self.framerate)
                         self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
 
                         # calculate connetivity
                         self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
                         self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                        self.spike_times, self.max_correlations, self.max_cor_templates = self.find_peaks(self.roi_dff, spike_templates_file, 0.85, 0.8)
-                        self.roi_analysis, self.framerate = self.analyze_ROI(self.roi_dff, self.spike_times)
+                        self.spike_times = self.scipy_find_peaks(self.roi_dff)
+                        self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
                         self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
                         self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
 
                         self.save_files()
                         self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                            st_spike_times, roi_analysis_st, st_max_correlation,
-                                            st_max_cor_temp, st_roi, st_layer, st_label)
+                                            st_spike_times, roi_analysis_st, st_roi, st_layer, st_label)
                         self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
-                                            nst_spike_times, roi_analysis_nst, nst_max_correlation,
-                                            nst_max_cor_temp, nst_roi, nst_layer, nst_label)
+                                            nst_spike_times, roi_analysis_nst, nst_roi, nst_layer, nst_label)
 
                     # clear
                     self.clear()
@@ -1428,13 +1428,13 @@ class Calcium(QWidget):
                     self.nst_colors = []
                     self.st_axes.cla()
                     self.nst_axes.cla()
-
+            print(f"folder path: {folder_path}")
             self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
             self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
             self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
 
             self.model_unet = None
-            self.unet_init = False
+            self.model_size = 0
 
             print(f'{folder_path} is done batch processing/inspected')
 
@@ -1541,31 +1541,30 @@ class Calcium(QWidget):
         return st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer
 
     def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
-                          roi_analysis, max_correlations, max_cor_templates,
-                          roi_dict, layer, labels) -> None:
+                          roi_analysis, roi_dict, layer, labels) -> None:
         '''
         save the analysis files for evoked activity
         '''
-        if self.roi_dict:
+        if len(roi_signal) > 0:
             save_path = self.img_path[0:-8]
+            today = date.today().strftime("%y%m%d")
+
+            # add date to the folder generated
+            save_path = save_path + "_" + today
             group_name = 'stimulated' if st else 'non_stimulated'
             save_path = os.path.join(save_path, group_name)
 
-            if not os.path.isdir(save_path):
+            if not os.path.exists(save_path):
                 os.mkdir(save_path)
 
             raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
             dff_fname = '/dff_st.csv' if st else '/dff_nst.csv'
             median_fname = '/medians_st.json' if st else '/medians_nst.json'
-            spike_fname = '/spike_times_st.json' if st else '/spike_times_nst.json'
-            roi_analysis_fname = '/roi_analysis_st.json' if st else '/roi_analysis_nst.json'
-            num_e_fname = '/num_events_st.csv' if st else '/num_events_nst.csv'
-            max_cor_fname = '/max_correlations_st.csv' if st else '/max_correlations_nst.csv'
-            max_cor_temp_fname = '/max_cor_templates_st.csv' if st else '/max_cor_templates_nst.csv'
-            roi_center_fname = '/roi_centers_st.json' if st else '/roi_centers_nst.json'
+            spike_fname = '/spike_times_st.pkl' if st else '/spike_times_nst.pkl'
+            roi_analysis_fname = '/roi_analysis_st.pkl' if st else '/roi_analysis_nst.pkl'
+            roi_center_fname = '/roi_centers_st.pkl' if st else '/roi_centers_nst.pkl'
             roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
             summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
-            cs_fname = '/roi_size_st.csv' if st else '/roi_size_nst.csv'
 
             raw_signal = np.zeros([len(roi_signal[list(roi_signal.keys())[0]]), len(roi_signal)])
             for i, r in enumerate(roi_signal):
@@ -1592,56 +1591,21 @@ class Calcium(QWidget):
                 json.dump(median, median_file, indent="")
 
             # the label-frame of peaks pairs
-            with open(save_path + spike_fname, 'w') as spike_file:
-                json.dump(spike_times, spike_file, indent="")
+            with open(save_path + spike_fname, 'wb') as spike_file:
+                pickle.dump(spike_times, spike_file)
             # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + roi_analysis_fname, 'w') as analysis_file:
-                json.dump(roi_analysis, analysis_file, indent="")
+            with open(save_path + roi_analysis_fname, 'wb') as analysis_file:
+                pickle.dump(roi_analysis, analysis_file)
 
-            # num of events and frequency
-            num_events = np.zeros((len(spike_times.keys()), 3))
-            active_roi = 0
-            frame_info = self.img_stack.shape[0]/self.framerate if self.framerate else len(self.img_stack)
-            for i, r in enumerate(spike_times):
-                num_e = len(spike_times[r])
-                if num_e > 0:
-                    active_roi += 1
-                num_events[i, 0] = r
-                num_events[i, 1] = num_e
-                num_events[i, 2] = num_e / frame_info
-
-            with open(save_path + num_e_fname, 'w', newline='') as num_event_file:
-                writer = csv.writer(num_event_file, dialect="excel")
-                fields = ['ROI', 'Num_events', 'Frequency (num of events/s)'] if self.framerate\
-                      else ['ROI', 'Num_events', 'Frequency (num of events/frame)']
+            cs_dict, _ = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
+            roi_data = self.all_roi_data(roi_analysis, cs_dict, spike_times, self.framerate, self.img_stack.shape[0])
+            with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
+                writer = csv.writer(roi_data_file, dialect='excel')
+                fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
+                        'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
+                        'average max slope', 'max slope SEM',  'InterEvent Interval', 'IEI SEM']
                 writer.writerow(fields)
-                writer.writerows(num_events)
-                sum_text = [[f'Active ROIs: {str(active_roi)}'], ['']]
-                sum_text.extend([[f'Framerate: {frame_info}']])
-                writer.writerows(sum_text)
-
-            max_cor = np.zeros([len(max_correlations[list(max_correlations.keys())[0]]),
-                    len(max_correlations)])
-            for i, r in enumerate(max_correlations):
-                max_cor[:, i] = max_correlations[r]
-
-            with open(save_path + max_cor_fname, 'w', newline='') as cor_file:
-                writer = csv.writer(cor_file)
-                writer.writerow(max_correlations.keys())
-                for i in range(max_cor.shape[0]):
-                    writer.writerow(max_cor[i, :])
-
-            # label-index of the spike template with the maximum correlation pair
-            max_cor_temps = np.zeros([len(max_cor_templates[list(max_cor_templates.keys())[0]]),
-                                      len(max_cor_templates)])
-            for i, r in enumerate(max_cor_templates):
-                max_cor_temps[:, i] = max_cor_templates[r]
-
-            with open(save_path + max_cor_temp_fname, 'w', newline='') as cor_temp_file:
-                writer = csv.writer(cor_temp_file)
-                writer.writerow(max_cor_templates.keys())
-                for i in range(max_cor_temps.shape[0]):
-                    writer.writerow(max_cor_temps[i, :])
+                writer.writerows(roi_data)
 
             # save the traces of two groups
             if st:
@@ -1664,7 +1628,8 @@ class Calcium(QWidget):
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
-            bk_im.save(save_path + roi_fname)
+            bk_im_num = self.add_num_to_img(bk_im, roi_dict)
+            bk_im_num.save(save_path + roi_fname)
 
             # save the ror_centers.json file
             roi_centers = {}
@@ -1672,18 +1637,14 @@ class Calcium(QWidget):
                 center = np.mean(roi_coords, axis=0)
                 roi_centers[roi_number] = (int(center[0]), int(center[1]))
 
-            with open(save_path + roi_center_fname, 'w') as roi_file:
-                json.dump(roi_centers, roi_file, indent="")
-
-            # save cell size
-            _, cs_arr = self.save_cell_size(roi_dict)
-            cs_field_name = ['ROI', 'cell size']
-            with open(save_path + cs_fname, 'w', newline='') as size_file:
-                writer = csv.writer(size_file)
-                writer.writerow(cs_field_name)
-                writer.writerows(cs_arr)
+            with open(save_path + roi_center_fname, 'wb') as roi_file:
+                pickle.dump(roi_centers, roi_file)
 
             self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
+
+        else:
+            group = "stimulated" if st else "non-stimulated"
+            print(f"No rois found in {group} group")
 
     def evoked_traces(self, st, dff, labels, layer, spike_times) -> None:
         '''
@@ -1706,18 +1667,20 @@ class Calcium(QWidget):
             self.nst_colors = colors
 
         if len(roi_to_plot) > 0:
-            dff_max = np.zeros(len(roi_to_plot))
-            for dff_index, dff_key in enumerate(roi_to_plot):
+            num_roi_to_plot, new_colors = self._random_pick(roi_to_plot, colors_to_plot, 10)
+
+            dff_max = np.zeros(len(num_roi_to_plot))
+            for dff_index, dff_key in enumerate(num_roi_to_plot):
                 dff_max[dff_index] = np.max(dff[dff_key])
             height_increment = max(dff_max)
 
+            y_pos = []
             if st:
-                st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-                st_axes = st_canvas_traces.figure.subplots()
-                st_axes.set_prop_cycle(color=colors_to_plot)
-                self.st_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+                self.st_axes.set_prop_cycle(color=new_colors)
+                self.st_axes_just_traces.set_prop_cycle(color=new_colors)
 
-                for height_index, d in enumerate(roi_to_plot):
+                for height_index, d in enumerate(num_roi_to_plot):
+                    y_pos.append(height_index * (1.2 * height_increment))
                     self.st_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                     self.st_axes.plot(dff[d] + height_index * (1.2 * height_increment))
                     if len(spike_times[d]) > 0:
@@ -1725,11 +1688,14 @@ class Calcium(QWidget):
                                     ms=2, color='k', marker='o', ls='')
                     self.st_canvas_traces.draw_idle()
                     self.st_canvas_just_traces.draw_idle()
-            else:
-                self.nst_axes.set_prop_cycle(color=colors_to_plot)
-                self.nst_axes_just_traces.set_prop_cycle(color=colors_to_plot)
+                self.st_axes.set_yticks(y_pos, labels=num_roi_to_plot)
 
-                for height_index, d in enumerate(roi_to_plot):
+            else:
+                self.nst_axes.set_prop_cycle(color=new_colors)
+                self.nst_axes_just_traces.set_prop_cycle(color=new_colors)
+
+                for height_index, d in enumerate(num_roi_to_plot):
+                    y_pos.append(height_index * (1.2 * height_increment))
                     self.nst_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
                     self.nst_axes.plot(dff[d] + height_index * (1.2 * height_increment))
                     if len(spike_times[d]) > 0:
@@ -1737,6 +1703,7 @@ class Calcium(QWidget):
                                     ms=2, color='k', marker='o', ls='')
                     self.nst_canvas_traces.draw_idle()
                     self.nst_canvas_just_traces.draw_idle()
+                self.nst_axes.set_yticks(y_pos, labels=num_roi_to_plot)
         else:
             print(f'{self.img_path} has no calcium events were detected for any ROI')
 
