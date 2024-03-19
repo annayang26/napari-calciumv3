@@ -1597,8 +1597,8 @@ class Calcium(QWidget):
             with open(save_path + roi_analysis_fname, 'wb') as analysis_file:
                 pickle.dump(roi_analysis, analysis_file)
 
-            cs_dict, _ = self.cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
-            roi_data = self.all_roi_data(self.roi_analysis, cs_dict, self.spike_times, self.framerate, self.img_stack.shape[0])
+            cs_dict, _ = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
+            roi_data = self.all_roi_data(roi_analysis, cs_dict, spike_times, self.framerate, self.img_stack.shape[0])
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
                 fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
@@ -1628,7 +1628,8 @@ class Calcium(QWidget):
             im = Image.fromarray((label_array*255).astype(np.uint8))
             bk_im = Image.new(im.mode, im.size, "black")
             bk_im.paste(im, im.split()[-1])
-            bk_im.save(save_path + roi_fname)
+            bk_im_num = self.add_num_to_img(bk_im, roi_dict)
+            bk_im_num.save(save_path + roi_fname)
 
             # save the ror_centers.json file
             roi_centers = {}
