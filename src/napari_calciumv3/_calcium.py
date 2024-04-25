@@ -88,6 +88,7 @@ class Calcium(QWidget):
         self.binning = None
         self.objective = None
         self.pixel_size = None
+        self.magnification = None
 
         # batch process
         self.batch_process = False
@@ -130,7 +131,7 @@ class Calcium(QWidget):
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(folder_path, file_name)
                     print(f'Analyzing {file_name}')
-                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    img = tff.imread(file_path, is_ome=False)
                     self.viewer.add_image(img, name=file_name)
 
                     self.img_stack = self.viewer.layers[0].data
@@ -272,7 +273,7 @@ class Calcium(QWidget):
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
             self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
             self.spike_times = self.scipy_find_peaks(self.roi_dff)
-            self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
+            self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata()
             self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
@@ -586,6 +587,7 @@ class Calcium(QWidget):
         bn = False
         obj = False
         ps = False
+        mag = False
 
         if os.path.exists(metadata_file):
             with open(metadata_file) as f:
@@ -607,10 +609,14 @@ class Calcium(QWidget):
                     words = line[19:-1].strip('\"').split(" ")
                     objective = int([word for word in words if word.endswith("x")][0][:-1])
                     obj = True
-                if fr and bn and ps and obj:
+                if line.startswith('"IntermediateMagnification-Magnification": '):
+                    word = line[len('"IntermediateMagnification-Magnification": '):-1].strip('\"')
+                    magnification = float(word[:-1])
+                    mag = True
+                if fr and bn and ps and obj and mag:
                     break
 
-        return framerate, binning, pixel_size, objective
+        return framerate, binning, pixel_size, objective, magnification
 
     def analyze_ROI(self, roi_dff: dict, spk_times: dict, framerate):
         '''
@@ -1100,7 +1106,7 @@ class Calcium(QWidget):
             with open(save_path + '/roi_centers.pkl', 'wb') as roi_file:
                 pickle.dump(roi_centers, roi_file)
 
-            cs_dict, _ = self.cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective)
+            cs_dict, _ = self.cell_size(self.roi_dict, self.binning, self.pixel_size, self.objective, self.magnification)
             roi_data = self.all_roi_data(self.roi_analysis, cs_dict, self.spike_times, self.framerate, self.img_stack.shape[0])
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
@@ -1132,7 +1138,7 @@ class Calcium(QWidget):
         ------------
         save_path: str.  the prefix of the tif file name
         '''
-        _, cs_arr = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
+        _, cs_arr = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective, self.magnification)
         avg_cs = float(np.mean(cs_arr, axis=0)[1])
         std_cs = float(np.std(cs_arr, axis=0)[1])
 
@@ -1220,7 +1226,7 @@ class Calcium(QWidget):
             if not evk_group:
                 sum_file.write(f'Global Connectivity: {self.mean_connect}')
 
-    def cell_size(self, roi_dict: dict, binning: int, pixel_size: float, objective:int) -> dict:
+    def cell_size(self, roi_dict: dict, binning: int, pixel_size: float, objective:int, magnification: float) -> dict:
         '''
         calculate the cell size of each labeled cell
 
@@ -1234,7 +1240,7 @@ class Calcium(QWidget):
         '''
         cs_dict = {}
         for r in roi_dict:
-            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / objective # pixel to um
+            cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / (objective*magnification) # pixel to um
 
         cs_arr = np.array(list(cs_dict.items()))
 
@@ -1346,6 +1352,8 @@ class Calcium(QWidget):
         self.colors = []
         self.binning = None
         self.objective = None
+        self.magnification = None
+        self.pixel_size = None
 
         self.axes.cla()
         self.canvas_traces.draw_idle()
@@ -1370,7 +1378,7 @@ class Calcium(QWidget):
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
                     file_path = os.path.join(folder_path, file_name)
-                    img = tff.imread(file_path, is_ome=False, is_mmstack=False)
+                    img = tff.imread(file_path, is_ome=False)
                     self.viewer.add_image(img, name=file_name)
                     self.img_stack = self.viewer.layers[1].data
                     self.img_path = file_path
@@ -1393,7 +1401,7 @@ class Calcium(QWidget):
                     # to group the cells in the stimulated area vs not in the stimulated area
                     if self.label_layer:
                         st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
-                        self.framerate, self.binning, self.pixel_size, self.objective = self.extract_metadata()
+                        self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata()
                         # stimulated cells
                         roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
                         roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
@@ -1597,7 +1605,7 @@ class Calcium(QWidget):
             with open(save_path + roi_analysis_fname, 'wb') as analysis_file:
                 pickle.dump(roi_analysis, analysis_file)
 
-            cs_dict, _ = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective)
+            cs_dict, _ = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective, self.magnification)
             roi_data = self.all_roi_data(roi_analysis, cs_dict, spike_times, self.framerate, self.img_stack.shape[0])
             with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
                 writer = csv.writer(roi_data_file, dialect='excel')
