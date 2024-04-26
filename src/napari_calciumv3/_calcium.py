@@ -208,6 +208,10 @@ class Calcium(QWidget):
             with open(dir_name + "/" + file_name) as file:
                 data = {}
                 data['name'] = dir_name.split(os.path.sep)[-1]
+                if data['name'] == 'stimulated':
+                    data['name'] = dir_name.split(os.path.sep)[-2] + '_ST'
+                elif data['name'] == 'non_stimulated':
+                    data['name'] = dir_name.split(os.path.sep)[-2] + '_NST'
                 lines = file.readlines()
                 # find the variable in the file
                 for line in lines:
