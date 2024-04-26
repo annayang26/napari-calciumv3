@@ -168,7 +168,7 @@ class Calcium(QWidget):
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
-    
+
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""
         if not (folder in self.folder_list):
