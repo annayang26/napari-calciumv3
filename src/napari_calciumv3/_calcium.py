@@ -89,6 +89,7 @@ class Calcium(QWidget):
         self.objective = None
         self.pixel_size = None
         self.magnification = None
+        self.folder_list: list = []
 
         # batch process
         self.batch_process = False
@@ -129,6 +130,7 @@ class Calcium(QWidget):
             print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
+                    self._record_folders(folder_path)
                     file_path = os.path.join(folder_path, file_name)
                     print(f'Analyzing {file_name}')
                     img = tff.imread(file_path, is_ome=False)
@@ -157,13 +159,20 @@ class Calcium(QWidget):
             print(f'{folder_path} is done batch processing/inspected')
 
             if self.model_unet:
-                self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
+                self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
+                del self.folder_list[-1]
             # reset the model
             self.model_unet = None
             self.model_size = 0
+            self.folder_list = []
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
+    
+    def _record_folders(self, folder: str):
+        """Record folder location for compilation."""
+        if not (folder in self.folder_list):
+            self.folder_list.append(folder)
 
     def compile_data(self, base_folder: str, file_name: str, variable: list,
                       output_name: str) -> None:
@@ -205,7 +214,8 @@ class Calcium(QWidget):
 
         # traverse through all the matching files
         for dir_name in dir_list:
-            with open(dir_name + "/" + file_name) as file:
+            with open (os.path.join(dir_name, file_name)) as file:
+            # with open(dir_name + "/" + file_name) as file:
                 data = {}
                 data['name'] = dir_name.split(os.path.sep)[-1]
                 lines = file.readlines()
@@ -234,10 +244,9 @@ class Calcium(QWidget):
         if len(files) > 0:
             # write into a new csv file
             field_names = list(data.keys())
-
-            compile_name = os.path.basename(base_folder) + output_name
-
-            with open(base_folder + "/" + compile_name, 'w', newline='') as c_file:
+            compile_name = base_folder + output_name
+            
+            with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
                 writer.writerows(files)
@@ -1377,6 +1386,7 @@ class Calcium(QWidget):
             print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
                 if file_name.endswith(".ome.tif"):
+                    self._record_folders(folder_path)
                     file_path = os.path.join(folder_path, file_name)
                     img = tff.imread(file_path, is_ome=False)
                     self.viewer.add_image(img, name=file_name)
@@ -1436,10 +1446,13 @@ class Calcium(QWidget):
                     self.nst_colors = []
                     self.st_axes.cla()
                     self.nst_axes.cla()
+            
             print(f"folder path: {folder_path}")
-            self.compile_data(folder_path, "summary.txt", None, "_compiled.csv")
-            self.compile_data(folder_path, "summary_st.txt", None, "_compiled_st.csv")
-            self.compile_data(folder_path, "summary_nst.txt", None, "_compiled_nst.csv")
+            if len(self.folder_list) > 0:
+                self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
+                self.compile_data(self.folder_list[-1], "summary_st.txt", None, "_compiled_st.csv")
+                self.compile_data(self.folder_list[-1], "summary_nst.txt", None, "_compiled_nst.csv")
+                del self.folder_list[-1]
 
             self.model_unet = None
             self.model_size = 0
