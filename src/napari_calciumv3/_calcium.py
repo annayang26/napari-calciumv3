@@ -158,7 +158,7 @@ class Calcium(QWidget):
 
             print(f'{folder_path} is done batch processing/inspected')
 
-            if self.model_unet:
+            if len(self.folder_list) > 0:
                 self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
                 del self.folder_list[-1]
             # reset the model
@@ -1450,7 +1450,7 @@ class Calcium(QWidget):
                     self.nst_colors = []
                     self.st_axes.cla()
                     self.nst_axes.cla()
-            
+
             print(f"folder path: {folder_path}")
             if len(self.folder_list) > 0:
                 self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
