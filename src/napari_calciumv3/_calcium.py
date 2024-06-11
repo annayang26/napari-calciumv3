@@ -1,13 +1,15 @@
 import csv
-import importlib.resources
 import json
 import os
 import pickle
-from typing import TYPE_CHECKING
 import random
 from datetime import date
+from typing import TYPE_CHECKING
+
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import tifffile as tff
@@ -82,6 +84,9 @@ class Calcium(QWidget):
         self.spike_times = None
         self.roi_analysis = None
         self.framerate = None
+        self.binning = None
+        self.objective = None
+        self.pixel_size = None
         self.mean_connect = None
         self.img_path = None
         self.colors = []
@@ -156,8 +161,6 @@ class Calcium(QWidget):
                     self.save_files()
                     self.clear()
 
-            print(f'{folder_path} is done batch processing/inspected')
-
             if len(self.folder_list) > 0:
                 self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
                 del self.folder_list[-1]
@@ -166,19 +169,19 @@ class Calcium(QWidget):
             self.model_size = 0
             self.folder_list = []
 
-        print('Batch Processing (spontaneous activity) Done')
-        self.batch_process = False
+            self.batch_process = False
+            print('Batch Processing (spontaneous activity) Done')
 
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""
-        if not (folder in self.folder_list):
+        if folder not in self.folder_list:
             self.folder_list.append(folder)
 
     def compile_data(self, base_folder: str, file_name: str, variable: list,
                       output_name: str) -> None:
         '''
         to compile all the data from different folders into one csv file
-        options to include the line name and the variable name(s) to look for; 
+        options to include the line name and the variable name(s) to look for;
         otherwise the programs finds the average amplitude in all the summary.txt
 
         parameters:
@@ -249,7 +252,7 @@ class Calcium(QWidget):
             # write into a new csv file
             field_names = list(data.keys())
             compile_name = base_folder + output_name
-            
+
             with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
@@ -294,7 +297,7 @@ class Calcium(QWidget):
 
     def segment(self, img_stack, minsize, background_label):
         '''
-        Predict the cell bodies using the trained NN model 
+        Predict the cell bodies using the trained NN model
         and further segment after removing small holes and objects
 
         Parameters:
@@ -472,7 +475,7 @@ class Calcium(QWidget):
 
     def calculate_background(self, f, window):
         '''
-        calculate the background fluorescence intensity based on the average of a specific number of 
+        calculate the background fluorescence intensity based on the average of a specific number of
             windows at the beginning
 
         parameters:
@@ -822,7 +825,7 @@ class Calcium(QWidget):
         parameters:
         --------------
         roi_diff: dict. a dictionary of label (int)-dff (dff at each frame) pair
-        amplitude_info: dict. label (int) - dict[amplitude, peak_indices, base_indices] 
+        amplitude_info: dict. label (int) - dict[amplitude, peak_indices, base_indices]
 
         returns:
         --------------
@@ -873,7 +876,7 @@ class Calcium(QWidget):
 
         parameters:
         -------------
-        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int) 
+        spk_times: dict. a dictionary of label (int) - the frame at which the peak occurs (int)
 
         returns:
         -------------
@@ -984,7 +987,7 @@ class Calcium(QWidget):
 
     def get_phase(self, total_frames: int, spks: list):
         '''
-        calculate the instantaneous phase between each frame that contains the peak 
+        calculate the instantaneous phase between each frame that contains the peak
 
         parameters:
         --------------
@@ -1252,6 +1255,7 @@ class Calcium(QWidget):
         cs_dict: dict. label-cell_size pair
         '''
         cs_dict = {}
+
         for r in roi_dict:
             cs_dict[r] = len(roi_dict[r]) * binning * pixel_size / (objective*magnification) # pixel to um
 
@@ -1360,6 +1364,7 @@ class Calcium(QWidget):
         self.spike_times = None
         self.roi_analysis = None
         self.framerate = None
+        self.binning = None
         self.mean_connect = None
         self.img_path = None
         self.colors = []
@@ -1508,7 +1513,11 @@ class Calcium(QWidget):
 
         # only include the pixels that is brighter than 80
         st_area = np.where(closing>threshold, 1, 0)
-        self.viewer.add_image(st_area, name="stimulated area")
+        processed_blue = self.viewer.add_image(st_area, name="stimulated area")
+
+        save_path = os.path.dirname(blue_file_path)
+        processed_blue.save(save_path + '/processed_blue.tif')
+
         st_area_pos = set()
         for i in range(st_area.shape[0]):
             for j in range(st_area.shape[1]):
@@ -1808,4 +1817,3 @@ class EvokedInputDialog(QDialog):
         msg_box.setInformativeText(msg)
         msg_box.setStandardButtons(QMessageBox.Ok)
         msg_box.exec()
-
