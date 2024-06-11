@@ -119,7 +119,7 @@ class Calcium(QWidget):
         r_shape = r.store.shape
         total_pos = r_shape[0]
 
-        # all_pos = r.sequence.stage_positions
+        all_pos = r.sequence.stage_positions
         self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata(r)
 
         for pos in range(total_pos):
@@ -127,7 +127,7 @@ class Calcium(QWidget):
 
             self.img_stack = rec
             self.img_path = folder_path
-            # self.img_name = all_pos[pos].name
+            self.img_name = all_pos[pos].name
 
             img_size = rec.shape[-1]
             self.img_size = img_size

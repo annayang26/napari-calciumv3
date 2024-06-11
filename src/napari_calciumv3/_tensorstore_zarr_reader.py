@@ -9,7 +9,7 @@ import numpy as np
 import tensorstore as ts
 from tifffile import imwrite
 from tqdm import tqdm
-# from useq import MDASequence
+from useq import MDASequence
 
 
 class TensorstoreZarrReader:
