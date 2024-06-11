@@ -168,10 +168,10 @@ class Calcium(QWidget):
 
         print('Batch Processing (spontaneous activity) Done')
         self.batch_process = False
-    
+
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""
-        if not (folder in self.folder_list):
+        if folder not in self.folder_list:
             self.folder_list.append(folder)
 
     def compile_data(self, base_folder: str, file_name: str, variable: list,
@@ -245,7 +245,7 @@ class Calcium(QWidget):
             # write into a new csv file
             field_names = list(data.keys())
             compile_name = base_folder + output_name
-            
+
             with open(os.path.join(base_folder, compile_name), 'w', newline='') as c_file:
                 writer = csv.DictWriter(c_file, fieldnames=field_names)
                 writer.writeheader()
@@ -468,7 +468,7 @@ class Calcium(QWidget):
 
     def calculate_background(self, f, window):
         '''
-        calculate the background fluorescence intensity based on the average of a specific number of 
+        calculate the background fluorescence intensity based on the average of a specific number of
             windows at the beginning
 
         parameters:
@@ -1233,7 +1233,9 @@ class Calcium(QWidget):
                     sum_file.write(f'Frequency (num_events/frame): {avg_num_events/frame}\n')
 
             if not evk_group:
-                sum_file.write(f'Global Connectivity: {self.mean_connect}')
+                sum_file.write(f'Global Connectivity: {self.mean_connect}\n')
+            sum_file.write(f'calculating the peak detection using: 35% of the mean of all frames')
+
 
     def cell_size(self, roi_dict: dict, binning: int, pixel_size: float, objective:int, magnification: float) -> dict:
         '''
@@ -1385,7 +1387,7 @@ class Calcium(QWidget):
         for (folder_path, _, _) in os.walk(self.ca_file):
             print(f'Inside {folder_path}')
             for file_name in os.listdir(folder_path):
-                if file_name.endswith(".ome.tif"):
+                if file_name.endswith(".ome.tif") and "blue" not in file_name:
                     self._record_folders(folder_path)
                     file_path = os.path.join(folder_path, file_name)
                     img = tff.imread(file_path, is_ome=False)
