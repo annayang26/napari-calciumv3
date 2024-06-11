@@ -7,9 +7,9 @@ from typing import Any, Mapping, cast
 
 import numpy as np
 import tensorstore as ts
-import useq
 from tifffile import imwrite
 from tqdm import tqdm
+from useq import MDASequence
 
 
 class TensorstoreZarrReader:
@@ -81,9 +81,9 @@ class TensorstoreZarrReader:
         return self._store
 
     @property
-    def sequence(self) -> useq.MDASequence | None:
+    def sequence(self) -> MDASequence | None:
         seq = self._metadata.get("useq_MDASequence")
-        return useq.MDASequence(**json.loads(seq)) if seq is not None else None
+        return MDASequence(**json.loads(seq)) if seq is not None else None
 
     # ___________________________Public Methods___________________________
 
