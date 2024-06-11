@@ -30,6 +30,8 @@ from scipy import ndimage as ndi
 from scipy import signal, stats
 from skimage import feature, filters, morphology, segmentation
 
+from _tensorstore_zarr_reader import TensorstoreZarrReader
+
 if TYPE_CHECKING:
     import napari
 
@@ -47,17 +49,8 @@ class Calcium(QWidget):
         self.bp_btn.clicked.connect(self._select_folder)
         self.layout().addWidget(self.bp_btn)
 
-        self.evoked_bp = QPushButton("Batch Process (evoked activity)")
-        self.evoked_bp.clicked.connect(self._evk_select)
-        self.layout().addWidget(self.evoked_bp)
-
-        btn = QPushButton("Analyze")
-        btn.clicked.connect(self._on_click)
-        self.layout().addWidget(btn)
-
         self.canvas_traces = FigureCanvas(Figure(constrained_layout=False))
         self.axes = self.canvas_traces.figure.subplots()
-        self.layout().addWidget(self.canvas_traces)
 
         self.canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
         self.axes_just_traces = self.canvas_just_traces.figure.subplots()
@@ -99,19 +92,6 @@ class Calcium(QWidget):
         # batch process
         self.batch_process = False
         self.model_size = 0
-        # batch process (evoked)
-        self.blue_file = None
-        self.ca_file = None
-        self.st_colors = []
-        self.nst_colors = []
-        self.st_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.st_axes = self.st_canvas_traces.figure.subplots()
-        self.st_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.st_axes_just_traces = self.st_canvas_just_traces.figure.subplots()
-        self.nst_canvas_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.nst_axes = self.nst_canvas_traces.figure.subplots()
-        self.nst_canvas_just_traces = FigureCanvas(Figure(constrained_layout=False))
-        self.nst_axes_just_traces = self.nst_canvas_just_traces.figure.subplots()
 
     def _select_folder(self) -> None:
         '''
@@ -125,52 +105,56 @@ class Calcium(QWidget):
         dlg.setFileMode(QFileDialog.Directory)
 
         if dlg.exec_():
-            folder_names = dlg.selectedFiles() # list of the path to the folder selected
+            folder_name = dlg.selectedFiles()[0] # list of the path to the folder selected
 
         self.batch_process = True
 
-        # traverse through all the ome.tif files in the selected folder
-        for (folder_path, _, _) in os.walk(folder_names[0]):
-            # for file_name in Path.iterdir(folder):
-            print(f'Inside {folder_path}')
-            for file_name in os.listdir(folder_path):
-                if file_name.endswith(".ome.tif"):
-                    self._record_folders(folder_path)
-                    file_path = os.path.join(folder_path, file_name)
-                    print(f'Analyzing {file_name}')
-                    img = tff.imread(file_path, is_ome=False)
-                    self.viewer.add_image(img, name=file_name)
+        if not folder_name.endswith("tensorstore.zarr"):
+            for folder_path, _, _ in os.walk(folder_name):
+                if folder_path.endswith("tensorstore.zarr"):
+                    folder_name = folder_path
 
-                    self.img_stack = self.viewer.layers[0].data
-                    self.img_path = file_path
-                    self.img_name = file_name
+        r = TensorstoreZarrReader(folder_name)
+        folder_path = r.path
+        r_shape = r.store.shape
+        total_pos = r_shape[0]
 
-                    img_size = self.img_stack.shape[-1]
+        all_pos = r.sequence.stage_positions
+        self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata(r)
 
-                    # only initiate the trained model once
-                    if self.model_size != img_size:
-                        dir_path = os.path.dirname(os.path.realpath(__file__))
-                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                        self.model_size = img_size
+        for pos in range(total_pos):
+            rec = r.isel({'p': pos}) # shape(n frames, x, y)
 
-                    # print("self img stack: ", self.img_stack.shape)
-                    # print("self img path ", self.img_path)
-                    # print("self img name: ", self.img_name)
-                    self._on_click()
-                    self.save_files()
-                    self.clear()
+            self.img_stack = rec
+            self.img_path = folder_path
+            self.img_name = all_pos[pos].name
 
-            if len(self.folder_list) > 0:
-                self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
-                del self.folder_list[-1]
-            # reset the model
-            self.model_unet = None
-            self.model_size = 0
-            self.folder_list = []
+            img_size = rec.shape[-1]
+            self.img_size = img_size
 
-            self.batch_process = False
-            print('Batch Processing (spontaneous activity) Done')
+            print(f'           Analyzing {self.img_name} at pos {pos}. shape: {rec.shape}')
+
+            # only initiate the trained model once
+            if self.model_size != img_size:
+                dir_path = os.path.dirname(os.path.realpath(__file__))
+                path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
+                self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
+                self.model_size = img_size
+
+        self._on_click()
+        self.save_files()
+        self.clear()
+
+        # if len(self.folder_list) > 0:
+        #     self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
+        #     del self.folder_list[-1]
+        # reset the model
+        self.model_unet = None
+        self.model_size = 0
+        self.folder_list = []
+
+        self.batch_process = False
+        print('Batch Processing (spontaneous activity) Done')
 
     def _record_folders(self, folder: str):
         """Record folder location for compilation."""
@@ -271,16 +255,6 @@ class Calcium(QWidget):
         -------------
         None
         '''
-        if not self.batch_process:
-            self.img_stack = self.viewer.layers[0].data
-            self.img_name = self.viewer.layers[0].name
-            self.img_path = self.viewer.layers[0].source.path
-
-            img_size = self.img_stack.shape[-1]
-            dir_path = os.path.dirname(os.path.realpath(__file__))
-            path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-            self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-
         background_layer = 0
         minsize = 100
         self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
@@ -289,7 +263,6 @@ class Calcium(QWidget):
             self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
             self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
             self.spike_times = self.scipy_find_peaks(self.roi_dff)
-            self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata()
             self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
             self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
 
@@ -593,44 +566,20 @@ class Calcium(QWidget):
 
         return spike_times
 
-    def extract_metadata(self)->float:
+    def extract_metadata(self, r: TensorstoreZarrReader)->float:
         '''
         extract information from the metadata
         '''
-        metadata_file = self.img_path[0:-8] + '_metadata.txt'
-        framerate = 0
-        fr = False
-        bn = False
-        obj = False
-        ps = False
-        mag = False
+        exposure = r.sequence.channels[0].exposure
+        framerate = 1 / exposure
 
-        if os.path.exists(metadata_file):
-            with open(metadata_file) as f:
-                metadata = f.readlines()
+        binning = int(2048 / self.img_size)
 
-            for line in metadata:
-                line = line.strip()
-                if line.startswith('"Exposure-ms": '):
-                    exposure = float(line[15:-1]) / 1000  # exposure in seconds
-                    framerate = 1 / exposure  # frames/second
-                    fr = True
-                if line.startswith('"Binning": '):
-                    binning = int(line[11:-1])
-                    bn = True
-                if line.startswith('"PixelSizeUm": '):
-                    pixel_size = float(line[15:-1])
-                    ps = True
-                if line.startswith('"Nosepiece-Label": '):
-                    words = line[19:-1].strip('\"').split(" ")
-                    objective = int([word for word in words if word.endswith("x")][0][:-1])
-                    obj = True
-                if line.startswith('"IntermediateMagnification-Magnification": '):
-                    word = line[len('"IntermediateMagnification-Magnification": '):-1].strip('\"')
-                    magnification = float(word[:-1])
-                    mag = True
-                if fr and bn and ps and obj and mag:
-                    break
+        pixel_size = 0.325
+
+        objective = 20
+
+        magnification = 1
 
         return framerate, binning, pixel_size, objective, magnification
 
@@ -1353,6 +1302,7 @@ class Calcium(QWidget):
 
         self.img_stack = None
         self.img_name = None
+        self.img_size = None
         self.labels = None
         self.label_layer = None
         self.prediction_layer = None
@@ -1375,445 +1325,3 @@ class Calcium(QWidget):
 
         self.axes.cla()
         self.canvas_traces.draw_idle()
-
-    def _evk_batch_process(self) -> None:
-        '''
-        start the batch process for evoked activity analysis
-
-        parameter:
-        ------------
-        None
-
-        return:
-        ------------
-        None
-        '''
-        st_area_pos = self.process_blue(self.blue_file, 80)
-
-        self.batch_process = True
-        for (folder_path, _, _) in os.walk(self.ca_file):
-            print(f'Inside {folder_path}')
-            for file_name in os.listdir(folder_path):
-                if file_name.endswith(".ome.tif"):
-                    self._record_folders(folder_path)
-                    file_path = os.path.join(folder_path, file_name)
-                    img = tff.imread(file_path, is_ome=False)
-                    self.viewer.add_image(img, name=file_name)
-                    self.img_stack = self.viewer.layers[1].data
-                    self.img_path = file_path
-                    self.img_name = file_name
-                    print(f'Analyzing {file_name}')
-
-                    img_size = self.img_stack.shape[-1]
-                    # only initiate the trained model once
-                    if self.model_size != img_size:
-                        dir_path = os.path.dirname(os.path.realpath(__file__))
-                        path = os.path.join(dir_path, f'unet_calcium_{img_size}.hdf5')
-                        self.model_unet = tf.keras.models.load_model(path, custom_objects={"K": K})
-                        self.model_size = img_size
-
-                    # produce the prediction and labeled layers
-                    background_layer = 0
-                    minsize = 100
-                    self.labels, self.label_layer, self.roi_dict = self.segment(self.img_stack, minsize, background_layer)
-
-                    # to group the cells in the stimulated area vs not in the stimulated area
-                    if self.label_layer:
-                        st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer = self.group_st_cells(st_area_pos, 0.1)
-                        self.framerate, self.binning, self.pixel_size, self.objective, self.magnification = self.extract_metadata()
-                        # stimulated cells
-                        roi_signal_st = self.calculate_ROI_intensity(st_roi, self.img_stack)
-                        roi_dff_st, median_st, _ = self.calculateDFF(roi_signal_st)
-                        st_spike_times = self.scipy_find_peaks(roi_dff_st)
-                        roi_analysis_st = self.analyze_ROI(roi_dff_st, st_spike_times, self.framerate)
-                        self.evoked_traces(True, roi_dff_st, st_label, st_layer, st_spike_times)
-
-                        # unstimulated cells
-                        roi_signal_nst = self.calculate_ROI_intensity(nst_roi, self.img_stack)
-                        roi_dff_nst, median_nst, _ = self.calculateDFF(roi_signal_nst)
-                        nst_spike_times = self.scipy_find_peaks(roi_dff_nst)
-                        roi_analysis_nst = self.analyze_ROI(roi_dff_nst, nst_spike_times, self.framerate)
-                        self.evoked_traces(False, roi_dff_nst, nst_label, nst_layer, nst_spike_times)
-
-                        # calculate connetivity
-                        self.roi_signal = self.calculate_ROI_intensity(self.roi_dict, self.img_stack)
-                        self.roi_dff, self.median, self.bg = self.calculateDFF(self.roi_signal)
-                        self.spike_times = self.scipy_find_peaks(self.roi_dff)
-                        self.roi_analysis = self.analyze_ROI(self.roi_dff, self.spike_times, self.framerate)
-                        self.mean_connect = self.get_mean_connect(self.roi_dff, self.spike_times)
-                        self.plot_values(self.roi_dff, self.labels, self.label_layer, self.spike_times)
-
-                        self.save_files()
-                        self.save_evoked_files(True, roi_signal_st, roi_dff_st, median_st,
-                                            st_spike_times, roi_analysis_st, st_roi, st_layer, st_label)
-                        self.save_evoked_files(False, roi_signal_nst, roi_dff_nst, median_nst,
-                                            nst_spike_times, roi_analysis_nst, nst_roi, nst_layer, nst_label)
-
-                    # clear
-                    self.clear()
-                    self.st_colors = []
-                    self.nst_colors = []
-                    self.st_axes.cla()
-                    self.nst_axes.cla()
-
-            print(f"folder path: {folder_path}")
-            if len(self.folder_list) > 0:
-                self.compile_data(self.folder_list[-1], "summary.txt", None, "_compiled.csv")
-                self.compile_data(self.folder_list[-1], "summary_st.txt", None, "_compiled_st.csv")
-                self.compile_data(self.folder_list[-1], "summary_nst.txt", None, "_compiled_nst.csv")
-                del self.folder_list[-1]
-
-            self.model_unet = None
-            self.model_size = 0
-
-            print(f'{folder_path} is done batch processing/inspected')
-
-        self.batch_process = False
-        self.blue_file = None
-        self.ca_file = None
-        self.viewer.layers.pop(0)
-        print('Batch processing (evoked activity) Done')
-
-    def _evk_select(self) -> None:
-        '''
-        the GUI method for users to select files and then call the batch process
-        '''
-        dialog = EvokedInputDialog(self)
-        dialog.exec_()
-
-        if dialog.select:
-            self.blue_file = dialog.blue_fpath
-            self.ca_file = dialog.ca_fpath
-            self._evk_batch_process()
-        else:
-            print("You canceled batch process for evoked activity")
-
-    def process_blue(self, blue_file_path: str, threshold: int) -> set:
-        '''
-        process the blue light file to get the position of the stimulatation area
-
-        Parameter:
-        -------------
-        blue_file_path: str. the path to the blue file
-        threshold: int. the cutoff-value of pixel brightness for the stimulated area
-
-        Return:
-        -------------
-        st_area: set. len(number of pixel in the stimulated area)
-            a set of the position of the pixels in the stimulated area
-        '''
-        blue_img = cv2.imread(blue_file_path, cv2.IMREAD_GRAYSCALE)
-        _,th = cv2.threshold(blue_img,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        blur = cv2.GaussianBlur(th,(5,5),0)
-        kernel = np.ones((5,5),np.uint8)
-        closing = cv2.morphologyEx(blur, cv2.MORPH_CLOSE, kernel)
-        erosion = cv2.erode(closing, kernel)
-        kernel = np.ones((10,10), np.uint8)
-        closing = cv2.morphologyEx(erosion, cv2.MORPH_CLOSE, kernel)
-
-        # only include the pixels that is brighter than 80
-        st_area = np.where(closing>threshold, 1, 0)
-        processed_blue = self.viewer.add_image(st_area, name="stimulated area")
-
-        save_path = os.path.dirname(blue_file_path)
-        processed_blue.save(save_path + '/processed_blue.tif')
-
-        st_area_pos = set()
-        for i in range(st_area.shape[0]):
-            for j in range(st_area.shape[1]):
-                if st_area[i][j] == 1:
-                    st_area_pos.add((i, j)) # row, column
-
-        return st_area_pos
-
-    def group_st_cells(self, blue_area, overlap_th: float) -> dict:
-        '''
-        group the cells that are (mostly) in the stimulated area together
-
-        parameter:
-        -----------
-        blue_area: ndarray. position of the pixels in the stimulated area
-        overlap_th: float. the cutoff value for couting a cell as stimulated
-
-        return:
-        -----------
-        st_roi: dict. label-position pair of stimulated cells
-        nst_roi: dict. label-position pair of cells that are not stimulated
-        '''
-        # find rois that is in the stimulated area
-        st_roi = {}
-        for r in self.roi_dict:
-            new_set = {tuple(value) for value in self.roi_dict[r]}
-            overlap = len(new_set.intersection(blue_area))
-            perc_overlap = overlap / len(self.roi_dict[r])
-
-            if perc_overlap > overlap_th:
-                st_roi[r] = self.roi_dict[r]
-
-        # group those that are not in the stimulated area
-        nst_roi = self.roi_dict.copy()
-
-        for label in st_roi:
-            del nst_roi[label]
-
-        # regroup the labels; shape = (img_size, img_size)
-        st_label = np.zeros_like(self.labels)
-        nst_label = np.zeros_like(self.labels)
-
-        for r in st_roi:
-            roi_coords = np.array(st_roi[r]).T.tolist()
-            st_label[tuple(roi_coords)] = r
-
-        for r in nst_roi:
-            roi_coords = np.array(nst_roi[r]).T.tolist()
-            nst_label[tuple(roi_coords)] = r
-
-        # create label layers for each group
-        st_layer = self.viewer.add_labels(st_label, name='Stimulated cells', opacity=1)
-        nst_layer = self.viewer.add_labels(nst_label, name='Not stimulated cells', opacity=1)
-
-        return st_roi, nst_roi, st_label, nst_label, st_layer, nst_layer
-
-    def save_evoked_files(self, st, roi_signal, roi_dff, median, spike_times,
-                          roi_analysis, roi_dict, layer, labels) -> None:
-        '''
-        save the analysis files for evoked activity
-        '''
-        if len(roi_signal) > 0:
-            save_path = self.img_path[0:-8]
-            today = date.today().strftime("%y%m%d")
-
-            # add date to the folder generated
-            save_path = save_path + "_" + today
-            group_name = 'stimulated' if st else 'non_stimulated'
-            save_path = os.path.join(save_path, group_name)
-
-            if not os.path.exists(save_path):
-                os.mkdir(save_path)
-
-            raw_signal_fname = '/raw_signal_st.csv' if st else '/raw_signal_nst.csv'
-            dff_fname = '/dff_st.csv' if st else '/dff_nst.csv'
-            median_fname = '/medians_st.json' if st else '/medians_nst.json'
-            spike_fname = '/spike_times_st.pkl' if st else '/spike_times_nst.pkl'
-            roi_analysis_fname = '/roi_analysis_st.pkl' if st else '/roi_analysis_nst.pkl'
-            roi_center_fname = '/roi_centers_st.pkl' if st else '/roi_centers_nst.pkl'
-            roi_fname = '/ROI_st.png' if st else '/ROI_nst.png'
-            summary_fname = '/summary_st.txt' if st else '/summary_nst.txt'
-
-            raw_signal = np.zeros([len(roi_signal[list(roi_signal.keys())[0]]), len(roi_signal)])
-            for i, r in enumerate(roi_signal):
-                raw_signal[:, i] = roi_signal[r]
-
-            with open(save_path + raw_signal_fname, 'w', newline='') as st_signal_file:
-                writer = csv.writer(st_signal_file, dialect='excel')
-                writer.writerow(roi_signal.keys())
-                for i in range(raw_signal.shape[0]):
-                    writer.writerow(raw_signal[i, :])
-
-            dff_signal = np.zeros([len(roi_dff[list(roi_dff.keys())[0]]), len(roi_dff)])
-            for i, r in enumerate(roi_dff):
-                dff_signal[:, i] = roi_dff[r]
-
-            with open(save_path + dff_fname, 'w', newline='') as dff_file:
-                writer = csv.writer(dff_file)
-                writer.writerow(roi_dff.keys())
-                for i in range(dff_signal.shape[0]):
-                    writer.writerow(dff_signal[i, :])
-
-            # the median background fluorescence
-            with open(save_path + median_fname, 'w') as median_file:
-                json.dump(median, median_file, indent="")
-
-            # the label-frame of peaks pairs
-            with open(save_path + spike_fname, 'wb') as spike_file:
-                pickle.dump(spike_times, spike_file)
-            # dict. label (int) - dict[amplitude, peak_indices, base_indices]
-            with open(save_path + roi_analysis_fname, 'wb') as analysis_file:
-                pickle.dump(roi_analysis, analysis_file)
-
-            cs_dict, _ = self.cell_size(roi_dict, self.binning, self.pixel_size, self.objective, self.magnification)
-            roi_data = self.all_roi_data(roi_analysis, cs_dict, spike_times, self.framerate, self.img_stack.shape[0])
-            with open(save_path + '/roi_data.csv', 'w', newline='') as roi_data_file:
-                writer = csv.writer(roi_data_file, dialect='excel')
-                fields = ['ROI', 'cell_size (um)', '# of events', 'frequency (num of events/s)',
-                        'average amplitude', 'amplitude SEM', 'average time to rise', 'time to rise SEM',
-                        'average max slope', 'max slope SEM',  'InterEvent Interval', 'IEI SEM']
-                writer.writerow(fields)
-                writer.writerows(roi_data)
-
-            # save the traces of two groups
-            if st:
-                self.st_canvas_traces.print_png(save_path + '/st_traces.png')
-                self.st_canvas_just_traces.print_png(save_path + '/st_traces_no_detections.png')
-            else:
-                self.nst_canvas_traces.print_png(save_path + '/nst_traces.png')
-                self.nst_canvas_just_traces.print_png(save_path + '/nst_traces_no_detections.png')
-
-            # save the labels separately
-            label_array = np.stack((layer.data,) * 4, axis=-1).astype(float)
-            for i in range(1, np.max(labels) + 1):
-                i_coords = np.asarray(label_array == [i, i, i, i]).nonzero()
-                if st:
-                    label_array[(i_coords[0], i_coords[1])] = self.st_colors[i - 1]
-                else:
-                    label_array[(i_coords[0], i_coords[1])] = self.nst_colors[i - 1]
-
-            # self.label_layer = self.viewer.add_image(label_array, name='roi_image', visible=False)
-            im = Image.fromarray((label_array*255).astype(np.uint8))
-            bk_im = Image.new(im.mode, im.size, "black")
-            bk_im.paste(im, im.split()[-1])
-            bk_im_num = self.add_num_to_img(bk_im, roi_dict)
-            bk_im_num.save(save_path + roi_fname)
-
-            # save the ror_centers.json file
-            roi_centers = {}
-            for roi_number, roi_coords in roi_dict.items():
-                center = np.mean(roi_coords, axis=0)
-                roi_centers[roi_number] = (int(center[0]), int(center[1]))
-
-            with open(save_path + roi_center_fname, 'wb') as roi_file:
-                pickle.dump(roi_centers, roi_file)
-
-            self.generate_summary(save_path, roi_analysis, spike_times, summary_fname, roi_dict, True)
-
-        else:
-            group = "stimulated" if st else "non-stimulated"
-            print(f"No rois found in {group} group")
-
-    def evoked_traces(self, st, dff, labels, layer, spike_times) -> None:
-        '''
-        '''
-        colors = []
-        for i in range(1, np.max(labels) + 1):
-            color = layer.get_color(i)
-            color = (color[0], color[1], color[2], color[3])
-            colors.append(color)
-
-        roi_to_plot = []
-        colors_to_plot = []
-        for i, r in enumerate(spike_times):
-            if len(spike_times[r]) > 0:
-                roi_to_plot.append(r)
-                colors_to_plot.append(colors[i])
-        if st:
-            self.st_colors = colors
-        else:
-            self.nst_colors = colors
-
-        if len(roi_to_plot) > 0:
-            num_roi_to_plot, new_colors = self._random_pick(roi_to_plot, colors_to_plot, 10)
-
-            dff_max = np.zeros(len(num_roi_to_plot))
-            for dff_index, dff_key in enumerate(num_roi_to_plot):
-                dff_max[dff_index] = np.max(dff[dff_key])
-            height_increment = max(dff_max)
-
-            y_pos = []
-            if st:
-                self.st_axes.set_prop_cycle(color=new_colors)
-                self.st_axes_just_traces.set_prop_cycle(color=new_colors)
-
-                for height_index, d in enumerate(num_roi_to_plot):
-                    y_pos.append(height_index * (1.2 * height_increment))
-                    self.st_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
-                    self.st_axes.plot(dff[d] + height_index * (1.2 * height_increment))
-                    if len(spike_times[d]) > 0:
-                        self.st_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
-                                    ms=2, color='k', marker='o', ls='')
-                    self.st_canvas_traces.draw_idle()
-                    self.st_canvas_just_traces.draw_idle()
-                self.st_axes.set_yticks(y_pos, labels=num_roi_to_plot)
-
-            else:
-                self.nst_axes.set_prop_cycle(color=new_colors)
-                self.nst_axes_just_traces.set_prop_cycle(color=new_colors)
-
-                for height_index, d in enumerate(num_roi_to_plot):
-                    y_pos.append(height_index * (1.2 * height_increment))
-                    self.nst_axes_just_traces.plot(dff[d] + height_index * (1.2 * height_increment))
-                    self.nst_axes.plot(dff[d] + height_index * (1.2 * height_increment))
-                    if len(spike_times[d]) > 0:
-                        self.nst_axes.plot(spike_times[d], dff[d][spike_times[d]] + height_index * (1.2 * height_increment),
-                                    ms=2, color='k', marker='o', ls='')
-                    self.nst_canvas_traces.draw_idle()
-                    self.nst_canvas_just_traces.draw_idle()
-                self.nst_axes.set_yticks(y_pos, labels=num_roi_to_plot)
-        else:
-            print(f'{self.img_path} has no calcium events were detected for any ROI')
-
-class EvokedInputDialog(QDialog):
-    def __init__(self, parent: QWidget):
-        super().__init__(parent)
-        self.setWindowTitle("Batch Process (evoked activity)")
-        self.blue_fpath = None
-        self.ca_fpath = None
-        self.select = False
-        self.blue_btn = QPushButton("select blue file")
-        self.blue_btn.clicked.connect(self._select_blue)
-        self.ca_btn = QPushButton("Select the folder")
-        self.ca_btn.clicked.connect(self._select_folder)
-        self.ok_btn = QPushButton("Ok")
-        self.cancel_btn = QPushButton("Cancel")
-
-        self.layout = QGridLayout()
-        self.layout.addWidget(QLabel("Select the blue light file: "), 0, 0)
-        self.layout.addWidget(self.blue_btn, 0, 1)
-        self.layout.addWidget(QLabel("Select the folder to batch process: "), 2, 0)
-        self.layout.addWidget(self.ca_btn, 2, 1)
-        self.layout.addWidget(self.ok_btn, 4, 0)
-        self.layout.addWidget(self.cancel_btn, 4, 1)
-        self.setLayout(self.layout)
-
-        self.ok_btn.clicked.connect(self.result)
-        self.cancel_btn.clicked.connect(self.reject)
-
-    def _select_blue(self) -> None:
-        '''
-        select the blue light file
-        '''
-        dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.ExistingFile)
-        if dlg.exec_():
-            self.blue_fpath = dlg.selectedFiles()[0]
-            self._update_fname(self.blue_fpath, 1)
-
-    def _select_folder(self) -> None:
-        '''
-        select folder to batch process
-        '''
-        dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.Directory)
-        if dlg.exec_():
-            self.ca_fpath = dlg.selectedFiles()[0]
-            self._update_fname(self.ca_fpath, 3)
-
-    def _update_fname(self, file, row) -> None:
-        '''
-        update the filename displayed on the selection window
-        '''
-        self.layout.addWidget(QLabel(file), row, 0)
-
-    def result(self) -> None:
-        '''
-        check the selection
-        '''
-        missing_var = None
-        if self.ca_fpath is None:
-            missing_var = "Recording folder"
-        elif self.blue_fpath is None:
-            missing_var = "Blue light file"
-        if missing_var:
-            self.error_msg(missing_var)
-        else:
-            self.select = True
-            self.accept()
-
-    def error_msg(self, missing_var:str) -> None:
-        '''
-        show the error msg
-        '''
-        msg_box = QMessageBox()
-        msg = f'Please select {missing_var} before proceeding'
-        msg_box.setInformativeText(msg)
-        msg_box.setStandardButtons(QMessageBox.Ok)
-        msg_box.exec()
