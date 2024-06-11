@@ -30,7 +30,7 @@ from scipy import ndimage as ndi
 from scipy import signal, stats
 from skimage import feature, filters, morphology, segmentation
 
-from _tensorstore_zarr_reader import TensorstoreZarrReader
+from ._tensorstore_zarr_reader import TensorstoreZarrReader
 
 if TYPE_CHECKING:
     import napari
